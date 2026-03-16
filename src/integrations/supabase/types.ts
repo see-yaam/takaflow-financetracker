@@ -38,6 +38,130 @@ export type Database = {
         }
         Relationships: []
       }
+      monthly_snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          month: string
+          opening_balance: number
+          total_expense: number
+          total_income: number
+          user_id: string
+          wallet_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: string
+          opening_balance?: number
+          total_expense?: number
+          total_income?: number
+          user_id: string
+          wallet_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: string
+          opening_balance?: number
+          total_expense?: number
+          total_income?: number
+          user_id?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "monthly_snapshots_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      recurring_transactions: {
+        Row: {
+          amount: number
+          category: string
+          created_at: string
+          day_of_month: number
+          id: string
+          last_applied_month: string | null
+          note: string | null
+          type: string
+          user_id: string
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          category: string
+          created_at?: string
+          day_of_month: number
+          id?: string
+          last_applied_month?: string | null
+          note?: string | null
+          type: string
+          user_id: string
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          category?: string
+          created_at?: string
+          day_of_month?: number
+          id?: string
+          last_applied_month?: string | null
+          note?: string | null
+          type?: string
+          user_id?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "recurring_transactions_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      savings_goals: {
+        Row: {
+          completed: boolean
+          created_at: string
+          deadline: string | null
+          emoji: string | null
+          id: string
+          saved_amount: number
+          target_amount: number
+          title: string
+          user_id: string
+        }
+        Insert: {
+          completed?: boolean
+          created_at?: string
+          deadline?: string | null
+          emoji?: string | null
+          id?: string
+          saved_amount?: number
+          target_amount: number
+          title: string
+          user_id: string
+        }
+        Update: {
+          completed?: boolean
+          created_at?: string
+          deadline?: string | null
+          emoji?: string | null
+          id?: string
+          saved_amount?: number
+          target_amount?: number
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       transactions: {
         Row: {
           amount: number
@@ -86,6 +210,7 @@ export type Database = {
         Row: {
           balance: number
           created_at: string
+          currency: string
           icon: string | null
           id: string
           name: string
@@ -94,6 +219,7 @@ export type Database = {
         Insert: {
           balance?: number
           created_at?: string
+          currency?: string
           icon?: string | null
           id?: string
           name: string
@@ -102,6 +228,7 @@ export type Database = {
         Update: {
           balance?: number
           created_at?: string
+          currency?: string
           icon?: string | null
           id?: string
           name?: string

@@ -1,10 +1,13 @@
 import { useState, useMemo } from "react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useWallets } from "@/hooks/useWallets";
+import { useMonthlySnapshots } from "@/hooks/useMonthlySnapshots";
 import { format, subMonths, getDaysInMonth, parse } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { motion } from "framer-motion";
+import AIInsights from "@/components/AIInsights";
+import MoneyFlowChart from "@/components/MoneyFlowChart";
 
 const CHART_COLORS = ["hsl(152,38%,52%)", "hsl(29,87%,67%)", "hsl(16,72%,61%)", "hsl(200,60%,50%)", "hsl(280,40%,60%)", "hsl(50,80%,55%)", "hsl(330,50%,55%)"];
 
@@ -22,6 +25,11 @@ export default function Reports() {
 
   const { data: transactions } = useTransactions({ month, walletId: filterWallet === "all" ? undefined : filterWallet, category: filterCategory === "all" ? undefined : filterCategory });
   const { data: wallets } = useWallets();
+  const { data: snapshots } = useMonthlySnapshots(month);
+
+  // Previous month data for AI comparison
+  const prevMonth = format(subMonths(parse(month, "yyyy-MM", new Date()), 1), "yyyy-MM");
+  const { data: prevTx } = useTransactions({ month: prevMonth });
 
   const allTxForMonth = useTransactions({ month }).data || [];
   const totalIncome = allTxForMonth.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
@@ -30,6 +38,23 @@ export default function Reports() {
   const daysInMonth = getDaysInMonth(parse(month, "yyyy-MM", new Date()));
   const avgDaily = totalExpense / (daysInMonth || 1);
   const avgDailyIncome = totalIncome / (daysInMonth || 1);
+
+  // Category data
+  const expenseCategoryMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    allTxForMonth.filter((t) => t.type === "expense").forEach((t) => {
+      map[t.category] = (map[t.category] || 0) + Number(t.amount);
+    });
+    return map;
+  }, [allTxForMonth]);
+
+  const incomeCategoryMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    allTxForMonth.filter((t) => t.type === "income").forEach((t) => {
+      map[t.category] = (map[t.category] || 0) + Number(t.amount);
+    });
+    return map;
+  }, [allTxForMonth]);
 
   // Daily bar chart data
   const dailyData = useMemo(() => {
@@ -45,22 +70,45 @@ export default function Reports() {
     return Object.entries(map).map(([day, v]) => ({ day: +day, ...v }));
   }, [allTxForMonth, daysInMonth]);
 
-  // Category pie data
   const categoryData = useMemo(() => {
-    const map: Record<string, number> = {};
-    allTxForMonth.filter((t) => t.type === "expense").forEach((t) => {
-      map[t.category] = (map[t.category] || 0) + Number(t.amount);
-    });
-    return Object.entries(map).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
-  }, [allTxForMonth]);
+    return Object.entries(expenseCategoryMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [expenseCategoryMap]);
 
   const categories = [...new Set(allTxForMonth.map((t) => t.category))];
+
+  // Previous month summary for AI
+  const prevMonthSummary = useMemo(() => {
+    if (!prevTx?.length) return undefined;
+    const prevCategories: Record<string, number> = {};
+    prevTx.filter((t) => t.type === "expense").forEach((t) => {
+      prevCategories[t.category] = (prevCategories[t.category] || 0) + Number(t.amount);
+    });
+    return {
+      totalIncome: prevTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0),
+      totalExpense: prevTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0),
+      categories: prevCategories,
+    };
+  }, [prevTx]);
+
+  // Wallet snapshots section
+  const walletBreakdown = useMemo(() => {
+    if (!snapshots?.length || !wallets?.length) return null;
+    return snapshots.map((s: any) => {
+      const w = wallets.find((w) => w.id === s.wallet_id);
+      return {
+        name: w?.name || "Unknown",
+        openingBalance: Number(s.opening_balance),
+        income: Number(s.total_income),
+        expense: Number(s.total_expense),
+        closingBalance: Number(s.opening_balance) + Number(s.total_income) - Number(s.total_expense),
+      };
+    });
+  }, [snapshots, wallets]);
 
   return (
     <div className="space-y-6">
       <h2 className="text-xl font-bold tracking-tight text-foreground">Monthly Report</h2>
 
-      {/* Month selector */}
       <Select value={month} onValueChange={setMonth}>
         <SelectTrigger className="w-48 bg-secondary border-border">
           <SelectValue />
@@ -90,6 +138,30 @@ export default function Reports() {
         ))}
       </div>
 
+      {/* Wallet breakdown from snapshots */}
+      {walletBreakdown && walletBreakdown.length > 0 && (
+        <div className="vault-card p-5">
+          <h3 className="wallet-label mb-4">Wallet Breakdown</h3>
+          <div className="space-y-3">
+            {walletBreakdown.map((wb) => (
+              <div key={wb.name} className="p-3 rounded-xl bg-secondary/50 border border-border/30">
+                <p className="text-sm font-medium text-foreground mb-2">{wb.name}</p>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                  <span className="text-muted-foreground">Opening</span>
+                  <span className="tabular-nums text-right text-foreground">৳{wb.openingBalance.toLocaleString()}</span>
+                  <span className="text-muted-foreground">+ Income</span>
+                  <span className="tabular-nums text-right text-primary">+৳{wb.income.toLocaleString()}</span>
+                  <span className="text-muted-foreground">- Expense</span>
+                  <span className="tabular-nums text-right text-foreground">-৳{wb.expense.toLocaleString()}</span>
+                  <span className="text-muted-foreground font-medium">= Closing</span>
+                  <span className="tabular-nums text-right font-medium text-foreground">৳{wb.closingBalance.toLocaleString()}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Bar chart */}
       <div className="vault-card p-5">
         <h3 className="wallet-label mb-4">Daily Income vs Expense</h3>
@@ -98,9 +170,7 @@ export default function Reports() {
             <BarChart data={dailyData}>
               <XAxis dataKey="day" tick={{ fill: "hsl(155,20%,60%)", fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fill: "hsl(155,20%,60%)", fontSize: 10 }} tickLine={false} axisLine={false} />
-              <Tooltip
-                contentStyle={{ backgroundColor: "hsl(150,30%,12%)", border: "1px solid hsl(150,15%,20%)", borderRadius: "12px", color: "#fff" }}
-              />
+              <Tooltip contentStyle={{ backgroundColor: "hsl(150,30%,12%)", border: "1px solid hsl(150,15%,20%)", borderRadius: "12px", color: "#fff" }} />
               <Bar dataKey="income" fill="hsl(152,38%,52%)" radius={[4, 4, 0, 0]} />
               <Bar dataKey="expense" fill="hsl(16,72%,61%)" radius={[4, 4, 0, 0]} />
             </BarChart>
@@ -126,6 +196,25 @@ export default function Reports() {
             </ResponsiveContainer>
           </div>
         </div>
+      )}
+
+      {/* Money Flow Chart */}
+      {(Object.keys(incomeCategoryMap).length > 0 || Object.keys(expenseCategoryMap).length > 0) && (
+        <MoneyFlowChart incomeByCategory={incomeCategoryMap} expenseByCategory={expenseCategoryMap} />
+      )}
+
+      {/* AI Insights */}
+      {allTxForMonth.length > 0 && (
+        <AIInsights
+          summary={{
+            totalIncome,
+            totalExpense,
+            net,
+            categories: expenseCategoryMap,
+            month,
+          }}
+          previousMonth={prevMonthSummary}
+        />
       )}
 
       {/* Filtered transaction list */}

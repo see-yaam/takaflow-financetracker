@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { useWallets, useCreateWallet, useUpdateWallet, useDeleteWallet } from "@/hooks/useWallets";
 import { useBudgetGoal, useUpsertBudgetGoal } from "@/hooks/useBudgetGoals";
+import { useRecurringTransactions, useDeleteRecurring } from "@/hooks/useRecurringTransactions";
+import { useStreaks } from "@/hooks/useStreaks";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { CURRENCIES } from "@/hooks/useCurrencyRates";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Plus, Pencil, Trash2, ArrowRightLeft } from "lucide-react";
+import { Plus, Pencil, Trash2, ArrowRightLeft, Repeat, Award } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function SettingsPage() {
@@ -22,14 +25,17 @@ export default function SettingsPage() {
   const currentMonth = format(new Date(), "yyyy-MM");
   const { data: budgetGoal } = useBudgetGoal(currentMonth);
   const upsertBudget = useUpsertBudgetGoal();
+  const { data: recurrings } = useRecurringTransactions();
+  const deleteRecurring = useDeleteRecurring();
+  const { badges } = useStreaks();
 
   const [newWalletName, setNewWalletName] = useState("");
   const [newWalletBalance, setNewWalletBalance] = useState("");
+  const [newWalletCurrency, setNewWalletCurrency] = useState("BDT");
   const [budgetInput, setBudgetInput] = useState("");
   const [editingWallet, setEditingWallet] = useState<{ id: string; name: string } | null>(null);
   const [editName, setEditName] = useState("");
 
-  // Transfer state
   const [transferFrom, setTransferFrom] = useState("");
   const [transferTo, setTransferTo] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
@@ -37,9 +43,10 @@ export default function SettingsPage() {
   const handleAddWallet = async () => {
     if (!newWalletName.trim()) return;
     try {
-      await createWallet.mutateAsync({ name: newWalletName.trim(), balance: parseFloat(newWalletBalance) || 0 });
+      await createWallet.mutateAsync({ name: newWalletName.trim(), balance: parseFloat(newWalletBalance) || 0, currency: newWalletCurrency });
       setNewWalletName("");
       setNewWalletBalance("");
+      setNewWalletCurrency("BDT");
       toast.success("Wallet added");
     } catch (e: any) { toast.error(e.message); }
   };
@@ -83,15 +90,12 @@ export default function SettingsPage() {
       return;
     }
     try {
-      // Create expense from source, income to destination
       await supabase.from("transactions").insert([
         { user_id: user!.id, wallet_id: transferFrom, type: "expense", amount: amt, category: "Transfer", note: `Transfer to ${wallets?.find(w => w.id === transferTo)?.name}`, date: format(new Date(), "yyyy-MM-dd") },
         { user_id: user!.id, wallet_id: transferTo, type: "income", amount: amt, category: "Transfer", note: `Transfer from ${wallets?.find(w => w.id === transferFrom)?.name}`, date: format(new Date(), "yyyy-MM-dd") },
       ]);
-      // The trigger will update balances
       toast.success("Transfer completed");
       setTransferAmount("");
-      // Invalidate queries
       window.location.reload();
     } catch (e: any) { toast.error(e.message); }
   };
@@ -113,14 +117,16 @@ export default function SettingsPage() {
               className="flex items-center justify-between py-2 border-b border-border/30 last:border-0"
             >
               <div>
-                <p className="text-sm font-medium text-foreground">{w.name}</p>
+                <p className="text-sm font-medium text-foreground">
+                  {w.name}
+                  {(w as any).currency && (w as any).currency !== "BDT" && (
+                    <span className="ml-2 text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{(w as any).currency}</span>
+                  )}
+                </p>
                 <p className="text-xs text-muted-foreground tabular-nums">৳{Number(w.balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
               </div>
               <div className="flex gap-2">
-                <button
-                  onClick={() => { setEditingWallet(w); setEditName(w.name); }}
-                  className="text-muted-foreground hover:text-foreground"
-                >
+                <button onClick={() => { setEditingWallet(w); setEditName(w.name); }} className="text-muted-foreground hover:text-foreground">
                   <Pencil className="h-4 w-4" />
                 </button>
                 <button onClick={() => handleDelete(w.id)} className="text-muted-foreground hover:text-destructive">
@@ -131,7 +137,6 @@ export default function SettingsPage() {
           ))}
         </div>
 
-        {/* Rename dialog */}
         <Dialog open={!!editingWallet} onOpenChange={(open) => !open && setEditingWallet(null)}>
           <DialogContent className="bg-card border-border">
             <DialogHeader><DialogTitle className="text-foreground">Rename Wallet</DialogTitle></DialogHeader>
@@ -140,17 +145,22 @@ export default function SettingsPage() {
           </DialogContent>
         </Dialog>
 
-        {/* Add wallet */}
         <div className="flex gap-2 mt-4">
           <Input value={newWalletName} onChange={(e) => setNewWalletName(e.target.value)} placeholder="Wallet name" className="bg-secondary border-border" />
-          <Input type="number" value={newWalletBalance} onChange={(e) => setNewWalletBalance(e.target.value)} placeholder="Balance" className="bg-secondary border-border w-32" />
+          <Input type="number" value={newWalletBalance} onChange={(e) => setNewWalletBalance(e.target.value)} placeholder="Balance" className="bg-secondary border-border w-28" />
+          <Select value={newWalletCurrency} onValueChange={setNewWalletCurrency}>
+            <SelectTrigger className="bg-secondary border-border w-20"><SelectValue /></SelectTrigger>
+            <SelectContent className="bg-popover border-border">
+              {CURRENCIES.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+            </SelectContent>
+          </Select>
           <Button onClick={handleAddWallet} size="icon" className="bg-primary text-primary-foreground shrink-0">
             <Plus className="h-4 w-4" />
           </Button>
         </div>
       </div>
 
-      {/* Transfer between wallets */}
+      {/* Transfer */}
       <div className="vault-card p-5">
         <h3 className="wallet-label mb-4 flex items-center gap-2"><ArrowRightLeft className="h-3 w-3" /> Transfer Between Wallets</h3>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -182,6 +192,51 @@ export default function SettingsPage() {
         <div className="flex gap-2">
           <Input type="number" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} placeholder="Monthly budget" className="bg-secondary border-border" />
           <Button onClick={handleSetBudget} className="bg-primary text-primary-foreground">Set</Button>
+        </div>
+      </div>
+
+      {/* Recurring Transactions */}
+      <div className="vault-card p-5">
+        <h3 className="wallet-label mb-4 flex items-center gap-2"><Repeat className="h-3 w-3" /> Recurring Transactions</h3>
+        {!recurrings?.length ? (
+          <p className="text-sm text-muted-foreground">No recurring transactions. Toggle "Repeat monthly" when adding a transaction.</p>
+        ) : (
+          <div className="space-y-2">
+            {recurrings.map((r: any) => (
+              <div key={r.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
+                <div>
+                  <p className="text-sm font-medium text-foreground">{r.category}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {r.type === "income" ? "+" : "-"}৳{Number(r.amount).toLocaleString()} · Day {r.day_of_month} · {(r as any).wallets?.name}
+                    {r.note ? ` · ${r.note}` : ""}
+                  </p>
+                </div>
+                <button onClick={() => deleteRecurring.mutate(r.id)} className="text-muted-foreground hover:text-destructive">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Badges */}
+      <div className="vault-card p-5">
+        <h3 className="wallet-label mb-4 flex items-center gap-2"><Award className="h-3 w-3" /> Badges</h3>
+        <div className="grid grid-cols-2 gap-3">
+          {badges.map((b) => (
+            <div
+              key={b.id}
+              className={`p-3 rounded-xl border border-border/30 ${b.earned ? "bg-primary/10" : "bg-secondary/30 opacity-50"}`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <span className="text-xl">{b.emoji}</span>
+                <span className="text-sm font-medium text-foreground">{b.name}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">{b.description}</p>
+              {b.earned && <p className="text-[10px] text-primary mt-1 font-medium">Earned!</p>}
+            </div>
+          ))}
         </div>
       </div>
 

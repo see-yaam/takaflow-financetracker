@@ -1,13 +1,19 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useWallets } from "@/hooks/useWallets";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useBudgetGoal } from "@/hooks/useBudgetGoals";
+import { useMonthRollover } from "@/hooks/useMonthRollover";
+import { useApplyRecurring } from "@/hooks/useRecurringTransactions";
+import { useStreaks } from "@/hooks/useStreaks";
+import { useCurrencyRates, convertToBDT } from "@/hooks/useCurrencyRates";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import { Smartphone, Landmark, Wallet, Plus, TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
 import BudgetProgressBar from "@/components/BudgetProgressBar";
+import BudgetTrafficLight from "@/components/BudgetTrafficLight";
+import StreakBadge from "@/components/StreakBadge";
 import { Navigate } from "react-router-dom";
 
 const iconMap: Record<string, React.ElementType> = {
@@ -18,24 +24,42 @@ const iconMap: Record<string, React.ElementType> = {
 
 export default function Dashboard() {
   const { data: wallets, isLoading: wLoading } = useWallets();
+  const { data: rates } = useCurrencyRates();
   const currentMonth = format(new Date(), "yyyy-MM");
+  const today = format(new Date(), "yyyy-MM-dd");
   const { data: transactions } = useTransactions({ month: currentMonth });
   const { data: budgetGoal } = useBudgetGoal(currentMonth);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerType, setDrawerType] = useState<"income" | "expense">("expense");
+  const { streak } = useStreaks();
+  const applyRecurring = useApplyRecurring();
+
+  // Auto-rollover snapshots
+  useMonthRollover();
+
+  // Apply recurring transactions on load
+  useEffect(() => {
+    applyRecurring.mutate();
+  }, []); // eslint-disable-line
 
   if (wLoading) {
-    return <div className="flex items-center justify-center h-64 text-muted-foreground animate-pulse">Loading vault...</div>;
+    return <div className="flex items-center justify-center h-64 text-muted-foreground animate-pulse">Loading...</div>;
   }
 
   if (wallets && wallets.length === 0) {
     return <Navigate to="/onboarding" replace />;
   }
 
-  const totalBalance = wallets?.reduce((s, w) => s + Number(w.balance), 0) || 0;
+  const totalBalance = wallets?.reduce((s, w) => {
+    const currency = (w as any).currency || "BDT";
+    return s + convertToBDT(Number(w.balance), currency, rates);
+  }, 0) || 0;
+
   const monthIncome = transactions?.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0) || 0;
   const monthExpense = transactions?.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0) || 0;
   const net = monthIncome - monthExpense;
+
+  const todayExpense = transactions?.filter((t) => t.type === "expense" && t.date === today).reduce((s, t) => s + Number(t.amount), 0) || 0;
 
   const openDrawer = (type: "income" | "expense") => {
     setDrawerType(type);
@@ -43,7 +67,10 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
+      {/* Streak */}
+      <StreakBadge streak={streak} />
+
       {/* Hero balance */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -52,7 +79,7 @@ export default function Dashboard() {
         className="vault-card p-8 relative overflow-hidden"
       >
         <div className="currency-watermark -top-12 -right-12 rotate-[15deg] text-accent/[0.04]">৳</div>
-        <p className="wallet-label mb-2">Total Liquidity</p>
+        <p className="wallet-label mb-2">Total Balance</p>
         <h2 className="text-balance-hero text-foreground">
           ৳{totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
         </h2>
@@ -62,6 +89,8 @@ export default function Dashboard() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {wallets?.map((w, i) => {
           const Icon = iconMap[w.icon || "wallet"] || Wallet;
+          const currency = (w as any).currency || "BDT";
+          const bdtEquiv = convertToBDT(Number(w.balance), currency, rates);
           return (
             <motion.div
               key={w.id}
@@ -74,18 +103,29 @@ export default function Dashboard() {
               <div className="flex items-center gap-2 mb-3">
                 <Icon className="h-4 w-4 text-accent" />
                 <span className="wallet-label">{w.name}</span>
+                {currency !== "BDT" && (
+                  <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{currency}</span>
+                )}
               </div>
               <p className="text-2xl font-bold tracking-tight tabular-nums text-foreground">
-                ৳{Number(w.balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                {currency !== "BDT" ? `${currency} ` : "৳"}{Number(w.balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}
               </p>
+              {currency !== "BDT" && (
+                <p className="text-xs text-muted-foreground tabular-nums mt-1">
+                  ≈ ৳{bdtEquiv.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                </p>
+              )}
             </motion.div>
           );
         })}
       </div>
 
-      {/* Budget progress */}
+      {/* Budget traffic light */}
       {budgetGoal && (
-        <BudgetProgressBar budget={budgetGoal.monthly_budget} spent={monthExpense} />
+        <>
+          <BudgetTrafficLight budget={budgetGoal.monthly_budget} todaySpend={todayExpense} />
+          <BudgetProgressBar budget={budgetGoal.monthly_budget} spent={monthExpense} />
+        </>
       )}
 
       {/* Month summary + actions */}
@@ -123,7 +163,7 @@ export default function Dashboard() {
       <div className="vault-card p-5">
         <h3 className="wallet-label mb-4">Recent Transactions</h3>
         {!transactions?.length ? (
-          <p className="text-sm text-muted-foreground">No transactions yet. Ready to initialize entries.</p>
+          <p className="text-sm text-muted-foreground">No transactions yet. Start tracking your spending.</p>
         ) : (
           <div className="space-y-0">
             {transactions.slice(0, 10).map((t) => (
