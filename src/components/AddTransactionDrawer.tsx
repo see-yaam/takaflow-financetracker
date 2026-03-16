@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,7 +32,8 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   const [date, setDate] = useState(defaultDate || format(new Date(), "yyyy-MM-dd"));
   const [recurring, setRecurring] = useState(false);
 
-  const handleOpenChange = (open: boolean) => {
+  // Reset all fields whenever drawer opens
+  useEffect(() => {
     if (open) {
       setType(defaultType);
       setAmount("");
@@ -42,8 +43,7 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
       setDate(defaultDate || format(new Date(), "yyyy-MM-dd"));
       setRecurring(false);
     }
-    onOpenChange(open);
-  };
+  }, [open]);
 
   const handleSubmit = async () => {
     if (!amount || !walletId || !category) {
