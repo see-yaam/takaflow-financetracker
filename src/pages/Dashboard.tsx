@@ -57,7 +57,7 @@ export default function Dashboard() {
   const monthExpense = transactions?.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0) || 0;
   const net = monthIncome - monthExpense;
 
-  const todayExpense = transactions?.filter((t) => t.type === "expense" && t.date === today).reduce((s, t) => s + Number(t.amount), 0) || 0;
+  
 
   const openDrawer = (type: "income" | "expense") => {
     setDrawerType(type);
