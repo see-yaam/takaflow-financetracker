@@ -66,9 +66,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Streak */}
-      <StreakBadge streak={streak} />
-
       {/* Hero balance */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
