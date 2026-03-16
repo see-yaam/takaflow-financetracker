@@ -82,7 +82,7 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   };
 
   return (
-    <Drawer open={open} onOpenChange={handleOpenChange}>
+    <Drawer open={open} onOpenChange={onOpenChange}>
       <DrawerContent className="bg-card border-border">
         <DrawerHeader>
           <DrawerTitle className="text-foreground tracking-tight">Add Transaction</DrawerTitle>
