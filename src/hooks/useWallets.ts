@@ -22,10 +22,10 @@ export function useCreateWallet() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async ({ name, balance, icon }: { name: string; balance: number; icon?: string }) => {
+    mutationFn: async ({ name, balance, icon, currency }: { name: string; balance: number; icon?: string; currency?: string }) => {
       const { data, error } = await supabase
         .from("wallets")
-        .insert({ name, balance, icon: icon || "wallet", user_id: user!.id })
+        .insert({ name, balance, icon: icon || "wallet", user_id: user!.id, currency: currency || "BDT" } as any)
         .select()
         .single();
       if (error) throw error;

@@ -1,11 +1,12 @@
 import { Outlet, useLocation, Link } from "react-router-dom";
-import { LayoutDashboard, Calendar, BarChart3, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, Calendar, BarChart3, Settings, LogOut, Target } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/calendar", icon: Calendar, label: "Calendar" },
+  { to: "/goals", icon: Target, label: "Goals" },
   { to: "/reports", icon: BarChart3, label: "Reports" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
@@ -20,7 +21,7 @@ export default function AppLayout() {
       <aside className="hidden md:flex flex-col w-64 bg-secondary/50 border-r border-border p-4">
         <div className="mb-8 px-2">
           <h1 className="text-xl font-bold tracking-tighter text-foreground">TakaFlow</h1>
-          <p className="text-xs text-muted-foreground mt-1">Financial Vault</p>
+          <p className="text-xs text-muted-foreground mt-1">Finance Tracker</p>
         </div>
         <nav className="flex-1 space-y-1">
           {navItems.map((item) => (
@@ -62,7 +63,7 @@ export default function AppLayout() {
             key={item.to}
             to={item.to}
             className={cn(
-              "flex flex-col items-center gap-1 px-3 py-1.5 text-xs transition-colors",
+              "flex flex-col items-center gap-1 px-2 py-1.5 text-[10px] transition-colors",
               pathname === item.to ? "text-primary" : "text-muted-foreground"
             )}
           >

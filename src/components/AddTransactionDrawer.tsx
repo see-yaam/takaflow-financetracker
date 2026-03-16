@@ -4,8 +4,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import { useWallets } from "@/hooks/useWallets";
 import { useCreateTransaction } from "@/hooks/useTransactions";
+import { useCreateRecurring } from "@/hooks/useRecurringTransactions";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -21,14 +23,15 @@ interface Props {
 export default function AddTransactionDrawer({ open, onOpenChange, defaultType = "expense", defaultDate }: Props) {
   const { data: wallets } = useWallets();
   const createTx = useCreateTransaction();
+  const createRecurring = useCreateRecurring();
   const [type, setType] = useState<"income" | "expense">(defaultType);
   const [amount, setAmount] = useState("");
   const [walletId, setWalletId] = useState("");
   const [category, setCategory] = useState("");
   const [note, setNote] = useState("");
   const [date, setDate] = useState(defaultDate || format(new Date(), "yyyy-MM-dd"));
+  const [recurring, setRecurring] = useState(false);
 
-  // Reset when opened
   const handleOpenChange = (open: boolean) => {
     if (open) {
       setType(defaultType);
@@ -37,6 +40,7 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
       setCategory("");
       setNote("");
       setDate(defaultDate || format(new Date(), "yyyy-MM-dd"));
+      setRecurring(false);
     }
     onOpenChange(open);
   };
@@ -55,7 +59,22 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
         note: note || undefined,
         date,
       });
-      toast.success("Transaction committed");
+
+      if (recurring) {
+        const dayOfMonth = new Date(date).getDate();
+        await createRecurring.mutateAsync({
+          wallet_id: walletId,
+          type,
+          amount: parseFloat(amount),
+          category,
+          note: note || undefined,
+          day_of_month: dayOfMonth,
+        });
+        toast.success("Transaction committed & recurring set");
+      } else {
+        toast.success("Transaction committed");
+      }
+
       onOpenChange(false);
     } catch (e: any) {
       toast.error(e.message);
@@ -66,7 +85,7 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
     <Drawer open={open} onOpenChange={handleOpenChange}>
       <DrawerContent className="bg-card border-border">
         <DrawerHeader>
-          <DrawerTitle className="text-foreground tracking-tight">Commit Transaction</DrawerTitle>
+          <DrawerTitle className="text-foreground tracking-tight">Add Transaction</DrawerTitle>
         </DrawerHeader>
         <div className="p-6 space-y-4">
           {/* Type toggle */}
@@ -145,6 +164,15 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
               placeholder="Transaction details..."
               className="bg-secondary border-border"
             />
+          </div>
+
+          {/* Recurring toggle */}
+          <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/30">
+            <div>
+              <p className="text-sm font-medium text-foreground">Repeat every month?</p>
+              <p className="text-xs text-muted-foreground">Auto-adds on same day each month</p>
+            </div>
+            <Switch checked={recurring} onCheckedChange={setRecurring} />
           </div>
 
           <Button
