@@ -29,7 +29,7 @@ export default function Dashboard() {
   const { data: budgetGoal } = useBudgetGoal(currentMonth);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerType, setDrawerType] = useState<"income" | "expense">("expense");
-  const { streak } = useStreaks();
+  
   const applyRecurring = useApplyRecurring();
 
   // Auto-rollover snapshots
