@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths } from "date-fns";
 import { useTransactions } from "@/hooks/useTransactions";
 import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
@@ -21,12 +21,29 @@ export default function CalendarPage() {
   const days = eachDayOfInterval({ start: monthStart, end: monthEnd });
   const startPadding = getDay(monthStart);
 
-  const txByDate = (transactions || []).reduce((acc, t) => {
-    const d = t.date;
-    if (!acc[d]) acc[d] = [];
-    acc[d].push(t);
-    return acc;
-  }, {} as Record<string, typeof transactions>);
+  const txByDate = useMemo(() => {
+    return (transactions || []).reduce((acc, t) => {
+      const d = t.date;
+      if (!acc[d]) acc[d] = [];
+      acc[d].push(t);
+      return acc;
+    }, {} as Record<string, typeof transactions>);
+  }, [transactions]);
+
+  // Pre-compute daily totals
+  const dailyTotals = useMemo(() => {
+    const totals: Record<string, { income: number; expense: number }> = {};
+    for (const [date, txs] of Object.entries(txByDate)) {
+      if (!txs) continue;
+      let income = 0, expense = 0;
+      for (const t of txs) {
+        if (t.type === "income") income += Number(t.amount);
+        else expense += Number(t.amount);
+      }
+      totals[date] = { income, expense };
+    }
+    return totals;
+  }, [txByDate]);
 
   const selectedKey = selectedDate ? format(selectedDate, "yyyy-MM-dd") : null;
   const selectedTxs = selectedKey ? txByDate[selectedKey] || [] : [];
@@ -57,20 +74,31 @@ export default function CalendarPage() {
           ))}
           {days.map((day) => {
             const key = format(day, "yyyy-MM-dd");
-            const hasTx = !!txByDate[key]?.length;
+            const totals = dailyTotals[key];
             const isSelected = selectedDate && isSameDay(day, selectedDate);
             const isToday = isSameDay(day, new Date());
             return (
               <button
                 key={key}
                 onClick={() => setSelectedDate(day)}
-                className={`relative aspect-square flex flex-col items-center justify-center rounded-lg text-sm transition-colors
+                className={`relative aspect-square flex flex-col items-center justify-center rounded-lg text-sm transition-colors p-0.5
                   ${isSelected ? "bg-primary text-primary-foreground" : isToday ? "bg-muted text-foreground" : "text-foreground hover:bg-muted/50"}
                 `}
               >
-                {day.getDate()}
-                {hasTx && (
-                  <div className={`absolute bottom-1 h-1 w-1 rounded-full ${isSelected ? "bg-primary-foreground" : "bg-accent"}`} />
+                <span className="text-xs font-medium">{day.getDate()}</span>
+                {totals && (
+                  <div className="flex flex-col items-center leading-none mt-0.5">
+                    {totals.income > 0 && (
+                      <span className={`text-[9px] font-semibold tabular-nums ${isSelected ? "text-primary-foreground/80" : "text-primary"}`}>
+                        +{totals.income >= 1000 ? `${(totals.income / 1000).toFixed(1)}k` : totals.income}
+                      </span>
+                    )}
+                    {totals.expense > 0 && (
+                      <span className={`text-[9px] font-semibold tabular-nums ${isSelected ? "text-primary-foreground/80" : "text-destructive"}`}>
+                        -{totals.expense >= 1000 ? `${(totals.expense / 1000).toFixed(1)}k` : totals.expense}
+                      </span>
+                    )}
+                  </div>
                 )}
               </button>
             );
@@ -98,17 +126,41 @@ export default function CalendarPage() {
                 <Plus className="h-3 w-3 mr-1" /> Add
               </Button>
             </div>
+
+            {/* Day summary */}
+            {selectedKey && dailyTotals[selectedKey] && (
+              <div className="flex gap-4 mb-4 text-sm">
+                {dailyTotals[selectedKey].income > 0 && (
+                  <span className="text-primary font-medium tabular-nums">
+                    +৳{dailyTotals[selectedKey].income.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </span>
+                )}
+                {dailyTotals[selectedKey].expense > 0 && (
+                  <span className="text-destructive font-medium tabular-nums">
+                    -৳{dailyTotals[selectedKey].expense.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </span>
+                )}
+              </div>
+            )}
+
             {selectedTxs.length === 0 ? (
               <p className="text-sm text-muted-foreground">No transactions on this date.</p>
             ) : (
               <div className="space-y-0">
                 {selectedTxs.map((t: any) => (
                   <div key={t.id} className="transaction-row">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{t.category}</p>
-                      <p className="text-xs text-muted-foreground">{t.note || t.wallets?.name}</p>
+                    <div className="flex items-center gap-3">
+                      <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold ${t.type === "income" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
+                        {t.type === "income" ? "+" : "-"}
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium text-foreground">{t.category}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {t.wallets?.name}{t.note ? ` · ${t.note}` : ""}
+                        </p>
+                      </div>
                     </div>
-                    <span className={`text-sm font-medium tabular-nums ${t.type === "income" ? "text-primary" : "text-foreground"}`}>
+                    <span className={`text-sm font-medium tabular-nums ${t.type === "income" ? "text-primary" : "text-destructive"}`}>
                       {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </span>
                   </div>

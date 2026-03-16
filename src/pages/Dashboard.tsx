@@ -4,7 +4,7 @@ import { useTransactions } from "@/hooks/useTransactions";
 import { useBudgetGoal } from "@/hooks/useBudgetGoals";
 import { useMonthRollover } from "@/hooks/useMonthRollover";
 import { useApplyRecurring } from "@/hooks/useRecurringTransactions";
-import { useStreaks } from "@/hooks/useStreaks";
+
 import { useCurrencyRates, convertToBDT } from "@/hooks/useCurrencyRates";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -12,8 +12,6 @@ import { Smartphone, Landmark, Wallet, Plus, TrendingUp, TrendingDown, ArrowUpDo
 import { Button } from "@/components/ui/button";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
 import BudgetProgressBar from "@/components/BudgetProgressBar";
-import BudgetTrafficLight from "@/components/BudgetTrafficLight";
-import StreakBadge from "@/components/StreakBadge";
 import { Navigate } from "react-router-dom";
 
 const iconMap: Record<string, React.ElementType> = {
@@ -26,12 +24,12 @@ export default function Dashboard() {
   const { data: wallets, isLoading: wLoading } = useWallets();
   const { data: rates } = useCurrencyRates();
   const currentMonth = format(new Date(), "yyyy-MM");
-  const today = format(new Date(), "yyyy-MM-dd");
+  
   const { data: transactions } = useTransactions({ month: currentMonth });
   const { data: budgetGoal } = useBudgetGoal(currentMonth);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerType, setDrawerType] = useState<"income" | "expense">("expense");
-  const { streak } = useStreaks();
+  
   const applyRecurring = useApplyRecurring();
 
   // Auto-rollover snapshots
@@ -59,7 +57,7 @@ export default function Dashboard() {
   const monthExpense = transactions?.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0) || 0;
   const net = monthIncome - monthExpense;
 
-  const todayExpense = transactions?.filter((t) => t.type === "expense" && t.date === today).reduce((s, t) => s + Number(t.amount), 0) || 0;
+  
 
   const openDrawer = (type: "income" | "expense") => {
     setDrawerType(type);
@@ -68,9 +66,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Streak */}
-      <StreakBadge streak={streak} />
-
       {/* Hero balance */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -120,12 +115,9 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Budget traffic light */}
+      {/* Budget progress */}
       {budgetGoal && (
-        <>
-          <BudgetTrafficLight budget={budgetGoal.monthly_budget} todaySpend={todayExpense} />
-          <BudgetProgressBar budget={budgetGoal.monthly_budget} spent={monthExpense} />
-        </>
+        <BudgetProgressBar budget={budgetGoal.monthly_budget} spent={monthExpense} />
       )}
 
       {/* Month summary + actions */}
