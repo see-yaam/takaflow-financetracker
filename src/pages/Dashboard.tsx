@@ -24,7 +24,7 @@ export default function Dashboard() {
   const { data: wallets, isLoading: wLoading } = useWallets();
   const { data: rates } = useCurrencyRates();
   const currentMonth = format(new Date(), "yyyy-MM");
-  const today = format(new Date(), "yyyy-MM-dd");
+  
   const { data: transactions } = useTransactions({ month: currentMonth });
   const { data: budgetGoal } = useBudgetGoal(currentMonth);
   const [drawerOpen, setDrawerOpen] = useState(false);
