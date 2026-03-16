@@ -115,12 +115,9 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Budget traffic light */}
+      {/* Budget progress */}
       {budgetGoal && (
-        <>
-          <BudgetTrafficLight budget={budgetGoal.monthly_budget} todaySpend={todayExpense} />
-          <BudgetProgressBar budget={budgetGoal.monthly_budget} spent={monthExpense} />
-        </>
+        <BudgetProgressBar budget={budgetGoal.monthly_budget} spent={monthExpense} />
       )}
 
       {/* Month summary + actions */}
