@@ -39,6 +39,28 @@ export default function SettingsPage() {
   const [transferFrom, setTransferFrom] = useState("");
   const [transferTo, setTransferTo] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetConfirm, setResetConfirm] = useState("");
+  const [resetting, setResetting] = useState(false);
+
+  const handleResetAccount = async () => {
+    if (resetConfirm !== "RESET" || !user) return;
+    setResetting(true);
+    try {
+      const tables = ["transactions", "monthly_snapshots", "recurring_transactions", "savings_goals", "budget_goals", "wallets"] as const;
+      for (const table of tables) {
+        await supabase.from(table).delete().eq("user_id", user.id);
+      }
+      toast.success("Account reset successfully. Starting fresh!");
+      setResetOpen(false);
+      setResetConfirm("");
+      window.location.href = "/onboarding";
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setResetting(false);
+    }
+  };
 
   const handleAddWallet = async () => {
     if (!newWalletName.trim()) return;
