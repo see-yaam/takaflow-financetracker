@@ -1,0 +1,198 @@
+import { useState } from "react";
+import { useWallets, useCreateWallet, useUpdateWallet, useDeleteWallet } from "@/hooks/useWallets";
+import { useBudgetGoal, useUpsertBudgetGoal } from "@/hooks/useBudgetGoals";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
+import { format } from "date-fns";
+import { Plus, Pencil, Trash2, ArrowRightLeft } from "lucide-react";
+import { motion } from "framer-motion";
+
+export default function SettingsPage() {
+  const { user, signOut } = useAuth();
+  const { data: wallets } = useWallets();
+  const createWallet = useCreateWallet();
+  const updateWallet = useUpdateWallet();
+  const deleteWallet = useDeleteWallet();
+  const currentMonth = format(new Date(), "yyyy-MM");
+  const { data: budgetGoal } = useBudgetGoal(currentMonth);
+  const upsertBudget = useUpsertBudgetGoal();
+
+  const [newWalletName, setNewWalletName] = useState("");
+  const [newWalletBalance, setNewWalletBalance] = useState("");
+  const [budgetInput, setBudgetInput] = useState("");
+  const [editingWallet, setEditingWallet] = useState<{ id: string; name: string } | null>(null);
+  const [editName, setEditName] = useState("");
+
+  // Transfer state
+  const [transferFrom, setTransferFrom] = useState("");
+  const [transferTo, setTransferTo] = useState("");
+  const [transferAmount, setTransferAmount] = useState("");
+
+  const handleAddWallet = async () => {
+    if (!newWalletName.trim()) return;
+    try {
+      await createWallet.mutateAsync({ name: newWalletName.trim(), balance: parseFloat(newWalletBalance) || 0 });
+      setNewWalletName("");
+      setNewWalletBalance("");
+      toast.success("Wallet added");
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleRename = async () => {
+    if (!editingWallet || !editName.trim()) return;
+    try {
+      await updateWallet.mutateAsync({ id: editingWallet.id, name: editName.trim() });
+      setEditingWallet(null);
+      toast.success("Wallet renamed");
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (!confirm("Delete this wallet and all its transactions?")) return;
+    try {
+      await deleteWallet.mutateAsync(id);
+      toast.success("Wallet deleted");
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleSetBudget = async () => {
+    const val = parseFloat(budgetInput);
+    if (!val || val <= 0) return;
+    try {
+      await upsertBudget.mutateAsync({ month: currentMonth, monthly_budget: val });
+      setBudgetInput("");
+      toast.success("Budget goal set");
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  const handleTransfer = async () => {
+    const amt = parseFloat(transferAmount);
+    if (!transferFrom || !transferTo || !amt || transferFrom === transferTo) {
+      toast.error("Select different wallets and enter amount");
+      return;
+    }
+    const fromWallet = wallets?.find((w) => w.id === transferFrom);
+    if (fromWallet && Number(fromWallet.balance) < amt) {
+      toast.error("Insufficient balance");
+      return;
+    }
+    try {
+      // Create expense from source, income to destination
+      await supabase.from("transactions").insert([
+        { user_id: user!.id, wallet_id: transferFrom, type: "expense", amount: amt, category: "Transfer", note: `Transfer to ${wallets?.find(w => w.id === transferTo)?.name}`, date: format(new Date(), "yyyy-MM-dd") },
+        { user_id: user!.id, wallet_id: transferTo, type: "income", amount: amt, category: "Transfer", note: `Transfer from ${wallets?.find(w => w.id === transferFrom)?.name}`, date: format(new Date(), "yyyy-MM-dd") },
+      ]);
+      // The trigger will update balances
+      toast.success("Transfer completed");
+      setTransferAmount("");
+      // Invalidate queries
+      window.location.reload();
+    } catch (e: any) { toast.error(e.message); }
+  };
+
+  return (
+    <div className="space-y-8 max-w-2xl">
+      <h2 className="text-xl font-bold tracking-tight text-foreground">Settings</h2>
+
+      {/* Manage wallets */}
+      <div className="vault-card p-5">
+        <h3 className="wallet-label mb-4">Manage Wallets</h3>
+        <div className="space-y-3">
+          {wallets?.map((w, i) => (
+            <motion.div
+              key={w.id}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: i * 0.03 }}
+              className="flex items-center justify-between py-2 border-b border-border/30 last:border-0"
+            >
+              <div>
+                <p className="text-sm font-medium text-foreground">{w.name}</p>
+                <p className="text-xs text-muted-foreground tabular-nums">৳{Number(w.balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}</p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => { setEditingWallet(w); setEditName(w.name); }}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Pencil className="h-4 w-4" />
+                </button>
+                <button onClick={() => handleDelete(w.id)} className="text-muted-foreground hover:text-destructive">
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </motion.div>
+          ))}
+        </div>
+
+        {/* Rename dialog */}
+        <Dialog open={!!editingWallet} onOpenChange={(open) => !open && setEditingWallet(null)}>
+          <DialogContent className="bg-card border-border">
+            <DialogHeader><DialogTitle className="text-foreground">Rename Wallet</DialogTitle></DialogHeader>
+            <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="bg-secondary border-border" />
+            <Button onClick={handleRename} className="bg-primary text-primary-foreground">Save</Button>
+          </DialogContent>
+        </Dialog>
+
+        {/* Add wallet */}
+        <div className="flex gap-2 mt-4">
+          <Input value={newWalletName} onChange={(e) => setNewWalletName(e.target.value)} placeholder="Wallet name" className="bg-secondary border-border" />
+          <Input type="number" value={newWalletBalance} onChange={(e) => setNewWalletBalance(e.target.value)} placeholder="Balance" className="bg-secondary border-border w-32" />
+          <Button onClick={handleAddWallet} size="icon" className="bg-primary text-primary-foreground shrink-0">
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+
+      {/* Transfer between wallets */}
+      <div className="vault-card p-5">
+        <h3 className="wallet-label mb-4 flex items-center gap-2"><ArrowRightLeft className="h-3 w-3" /> Transfer Between Wallets</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <Select value={transferFrom} onValueChange={setTransferFrom}>
+            <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="From" /></SelectTrigger>
+            <SelectContent className="bg-popover border-border">
+              {wallets?.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={transferTo} onValueChange={setTransferTo}>
+            <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="To" /></SelectTrigger>
+            <SelectContent className="bg-popover border-border">
+              {wallets?.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Input type="number" value={transferAmount} onChange={(e) => setTransferAmount(e.target.value)} placeholder="Amount" className="bg-secondary border-border" />
+        </div>
+        <Button onClick={handleTransfer} className="mt-3 bg-primary text-primary-foreground">Execute Transfer</Button>
+      </div>
+
+      {/* Budget goal */}
+      <div className="vault-card p-5">
+        <h3 className="wallet-label mb-4">Monthly Budget Goal</h3>
+        {budgetGoal && (
+          <p className="text-sm text-muted-foreground mb-3 tabular-nums">
+            Current: ৳{Number(budgetGoal.monthly_budget).toLocaleString("en-US", { minimumFractionDigits: 2 })} for {format(new Date(), "MMMM yyyy")}
+          </p>
+        )}
+        <div className="flex gap-2">
+          <Input type="number" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} placeholder="Monthly budget" className="bg-secondary border-border" />
+          <Button onClick={handleSetBudget} className="bg-primary text-primary-foreground">Set</Button>
+        </div>
+      </div>
+
+      {/* Account */}
+      <div className="vault-card p-5">
+        <h3 className="wallet-label mb-4">Account</h3>
+        <p className="text-sm text-muted-foreground mb-4">{user?.email}</p>
+        <Button onClick={signOut} variant="outline" className="border-border text-foreground hover:bg-destructive/10 hover:text-destructive">
+          Sign Out
+        </Button>
+      </div>
+    </div>
+  );
+}
