@@ -57,6 +57,11 @@ export default function Login() {
               className="bg-secondary border-border"
             />
           </div>
+          <div className="flex justify-end">
+            <Link to="/forgot-password" className="text-xs text-muted-foreground hover:text-primary transition-colors">
+              Forgot Password?
+            </Link>
+          </div>
           <Button type="submit" disabled={loading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
             {loading ? "Authenticating..." : "Enter Vault"}
           </Button>
