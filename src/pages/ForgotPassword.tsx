@@ -15,15 +15,22 @@ export default function ForgotPassword() {
     e.preventDefault();
     if (loading) return;
     setLoading(true);
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: "https://takaflow-financetracker.lovable.app/reset-password",
-    });
-    if (error) {
-      toast.error(error.message);
-    } else {
-      setSent(true);
-      toast.success("Password reset link sent! Check your email.");
+
+    try {
+      const { data, error } = await supabase.functions.invoke("send-reset-email", {
+        body: { email },
+      });
+
+      if (error) {
+        toast.error("Failed to send reset link. Please try again.");
+      } else {
+        setSent(true);
+        toast.success("If an account exists, a reset link has been sent!");
+      }
+    } catch {
+      toast.error("Something went wrong. Please try again.");
     }
+
     setLoading(false);
   };
 
