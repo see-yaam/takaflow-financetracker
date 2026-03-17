@@ -2,3 +2,9 @@ project_id = "cpngaqkjvimrismpxoeg"
 
 [functions.ai-insights]
 verify_jwt = false
+
+[functions.send-reset-email]
+verify_jwt = false
+
+[functions.verify-reset-token]
+verify_jwt = false
