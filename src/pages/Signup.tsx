@@ -29,7 +29,7 @@ export default function Signup() {
     if (error) {
       toast.error(error.message);
     } else {
-      toast.success("Account created! Check your email to verify.");
+      toast.success("Account created! Now Login with your gmail & password.");
       navigate("/login");
     }
     setLoading(false);
