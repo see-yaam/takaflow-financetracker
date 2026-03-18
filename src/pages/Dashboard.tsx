@@ -12,7 +12,7 @@ import { Smartphone, Landmark, Wallet, Plus, TrendingUp, TrendingDown, ArrowUpDo
 import { Button } from "@/components/ui/button";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
 import BudgetProgressBar from "@/components/BudgetProgressBar";
-import { Navigate } from "react-router-dom";
+
 
 const iconMap: Record<string, React.ElementType> = {
   smartphone: Smartphone,
