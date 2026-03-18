@@ -41,8 +41,8 @@ export default function Signup() {
       <div className="vault-card p-8 w-full max-w-md relative z-10">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tighter text-foreground">TakaFlow</h1>
-          <p className="text-muted-foreground mt-2 text-sm">Initialize your financial vault</p>
-          <p className="mt-2 text-sm" style={{color: '#39ff14'}}>Create your account</p>
+          <p className="text-muted-foreground mt-2 text-sm">Initialize your financial vault by creating your account</p>
+        {/*   <p className="mt-2 text-sm" style={{color: '#39ff14'}}>Create your account</p> */}
         </div>
         <form onSubmit={handleSignup} className="space-y-4">
           <div className="space-y-2">
