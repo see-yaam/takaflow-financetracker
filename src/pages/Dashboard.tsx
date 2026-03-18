@@ -45,7 +45,7 @@ export default function Dashboard() {
   }
 
   if (wallets && wallets.length === 0) {
-    return <Navigate to="/onboarding" replace />;
+    return <div className="flex items-center justify-center h-64 text-muted-foreground animate-pulse">Loading...</div>;
   }
 
   const totalBalance = wallets?.reduce((s, w) => {
