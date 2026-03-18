@@ -10,7 +10,13 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
+  const [emailFocused, setEmailFocused] = useState(false);
+  const [emailBlurred, setEmailBlurred] = useState(false);
   const navigate = useNavigate();
+
+  const isGmail = email.trim().toLowerCase().endsWith("@gmail.com");
+  const showHint = emailFocused && !emailBlurred;
+  const showWarning = emailBlurred && email.includes("@") && !isGmail;
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +46,36 @@ export default function Signup() {
         <form onSubmit={handleSignup} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@example.com" required className="bg-secondary border-border" />
+            <Input
+              id="email"
+              type="email"
+              value={email}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                if (emailBlurred) setEmailBlurred(false);
+              }}
+              onFocus={() => {
+                setEmailFocused(true);
+                setEmailBlurred(false);
+              }}
+              onBlur={() => {
+                setEmailBlurred(true);
+                setEmailFocused(false);
+              }}
+              placeholder="you@example.com"
+              required
+              className="bg-secondary border-border"
+            />
+            {showHint && (
+              <p className="text-xs text-amber-500/80 mt-1">
+                💡 Use a Gmail address (gmail.com) for the best experience.
+              </p>
+            )}
+            {showWarning && (
+              <p className="text-xs text-amber-500 mt-1">
+                ⚠️ Non-Gmail addresses may not receive password reset emails. We recommend using a Gmail address (gmail.com).
+              </p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>

@@ -12,7 +12,7 @@ import { Smartphone, Landmark, Wallet, Plus, TrendingUp, TrendingDown, ArrowUpDo
 import { Button } from "@/components/ui/button";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
 import BudgetProgressBar from "@/components/BudgetProgressBar";
-import { Navigate } from "react-router-dom";
+
 
 const iconMap: Record<string, React.ElementType> = {
   smartphone: Smartphone,
@@ -45,7 +45,7 @@ export default function Dashboard() {
   }
 
   if (wallets && wallets.length === 0) {
-    return <Navigate to="/onboarding" replace />;
+    return <div className="flex items-center justify-center h-64 text-muted-foreground animate-pulse">Loading...</div>;
   }
 
   const totalBalance = wallets?.reduce((s, w) => {
