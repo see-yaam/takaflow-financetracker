@@ -63,7 +63,7 @@ export default function Signup() {
                 setEmailBlurred(true);
                 setEmailFocused(false);
               }}
-              placeholder="you@example.com"
+              placeholder="you@gmail.com"
               required
               className="bg-secondary border-border"
             />
