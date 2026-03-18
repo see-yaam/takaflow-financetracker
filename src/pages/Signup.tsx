@@ -88,7 +88,7 @@ export default function Signup() {
         </form>
         <p className="text-center text-sm text-muted-foreground mt-6">
           Already have a vault?{" "}
-          <Link to="/login" className="text-primary hover:underline">Sign in</Link>
+          <Link to="/login" className="text-primary hover:underline">Log in</Link>
         </p>
       </div>
     </div>
