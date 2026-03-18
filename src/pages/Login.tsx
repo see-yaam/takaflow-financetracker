@@ -30,7 +30,7 @@ export default function Login() {
       <div className="vault-card p-8 w-full max-w-md relative z-10">
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tighter text-foreground">TakaFlow</h1>
-          <p className="text-muted-foreground mt-2 text-sm">Access your financial vault</p>
+          <p className="text-muted-foreground mt-2 text-sm">Access your financial vault by login </p>
         </div>
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
