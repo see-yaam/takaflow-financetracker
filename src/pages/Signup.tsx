@@ -42,6 +42,7 @@ export default function Signup() {
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tighter text-foreground">TakaFlow</h1>
           <p className="text-muted-foreground mt-2 text-sm">Initialize your financial vault</p>
+          <p className="text-muted-foreground mt-2 text-sm">Create your account</p>
         </div>
         <form onSubmit={handleSignup} className="space-y-4">
           <div className="space-y-2">
