@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useWallets } from "@/hooks/useWallets";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useBudgetGoal } from "@/hooks/useBudgetGoals";
 import { useMonthRollover } from "@/hooks/useMonthRollover";
 import { useApplyRecurring } from "@/hooks/useRecurringTransactions";
-
+import { useDebts } from "@/hooks/useDebts";
 import { useCurrencyRates, convertToBDT } from "@/hooks/useCurrencyRates";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
