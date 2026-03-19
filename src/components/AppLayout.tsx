@@ -7,6 +7,7 @@ const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/calendar", icon: Calendar, label: "Calendar" },
   { to: "/goals", icon: Target, label: "Goals" },
+  { to: "/debts", icon: Handshake, label: "Debts" },
   { to: "/reports", icon: BarChart3, label: "Reports" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];
