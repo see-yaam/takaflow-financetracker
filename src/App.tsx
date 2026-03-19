@@ -14,6 +14,7 @@ import Dashboard from "@/pages/Dashboard";
 import CalendarPage from "@/pages/CalendarPage";
 import GoalsPage from "@/pages/GoalsPage";
 import Reports from "@/pages/Reports";
+import DebtsPage from "@/pages/DebtsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import NotFound from "@/pages/NotFound";
 
