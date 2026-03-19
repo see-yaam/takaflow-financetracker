@@ -2,6 +2,8 @@ import { Outlet, useLocation, Link } from "react-router-dom";
 import { LayoutDashboard, Calendar, BarChart3, Settings, LogOut, Target, Handshake } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { useState } from "react";
+import SignOutConfirmDialog from "@/components/SignOutConfirmDialog";
 
 const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
@@ -15,6 +17,7 @@ const navItems = [
 export default function AppLayout() {
   const { pathname } = useLocation();
   const { signOut } = useAuth();
+  const [signOutOpen, setSignOutOpen] = useState(false);
 
   return (
     <div className="flex min-h-screen bg-background">
@@ -42,7 +45,7 @@ export default function AppLayout() {
           ))}
         </nav>
         <button
-          onClick={signOut}
+          onClick={() => setSignOutOpen(true)}
           className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-muted-foreground hover:text-destructive transition-colors"
         >
           <LogOut className="h-4 w-4" />
@@ -73,6 +76,11 @@ export default function AppLayout() {
           </Link>
         ))}
       </nav>
+      <SignOutConfirmDialog
+        open={signOutOpen}
+        onOpenChange={setSignOutOpen}
+        onConfirm={signOut}
+      />
     </div>
   );
 }

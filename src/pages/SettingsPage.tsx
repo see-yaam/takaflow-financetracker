@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import SignOutConfirmDialog from "@/components/SignOutConfirmDialog";
 import { CURRENCIES } from "@/hooks/useCurrencyRates";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -44,6 +45,7 @@ export default function SettingsPage() {
   const [resetOpen, setResetOpen] = useState(false);
   const [resetConfirm, setResetConfirm] = useState("");
   const [resetting, setResetting] = useState(false);
+  const [signOutOpen, setSignOutOpen] = useState(false);
 
   const handleResetAccount = async () => {
     if (resetConfirm !== "RESET" || !user) return;
@@ -283,7 +285,7 @@ export default function SettingsPage() {
       <div className="vault-card p-5">
         <h3 className="wallet-label mb-4">Account</h3>
         <p className="text-sm text-muted-foreground mb-4">{user?.email}</p>
-        <Button onClick={signOut} variant="outline" className="border-border text-foreground hover:bg-destructive/10 hover:text-destructive">
+        <Button onClick={() => setSignOutOpen(true)} variant="outline" className="border-border text-foreground hover:bg-destructive/10 hover:text-destructive">
           Sign Out
         </Button>
       </div>
@@ -326,6 +328,12 @@ export default function SettingsPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <SignOutConfirmDialog
+        open={signOutOpen}
+        onOpenChange={setSignOutOpen}
+        onConfirm={signOut}
+      />
     </div>
   );
 }
