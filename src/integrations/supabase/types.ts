@@ -38,6 +38,94 @@ export type Database = {
         }
         Relationships: []
       }
+      debt_payments: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          debt_id: string
+          id: string
+          note: string | null
+          user_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          date?: string
+          debt_id: string
+          id?: string
+          note?: string | null
+          user_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          debt_id?: string
+          id?: string
+          note?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debt_payments_debt_id_fkey"
+            columns: ["debt_id"]
+            isOneToOne: false
+            referencedRelation: "debts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      debts: {
+        Row: {
+          amount: number
+          created_at: string
+          date: string
+          id: string
+          note: string | null
+          person_name: string
+          remaining_amount: number
+          settled: boolean
+          type: string
+          user_id: string
+          wallet_id: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          date?: string
+          id?: string
+          note?: string | null
+          person_name: string
+          remaining_amount: number
+          settled?: boolean
+          type: string
+          user_id: string
+          wallet_id: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          date?: string
+          id?: string
+          note?: string | null
+          person_name?: string
+          remaining_amount?: number
+          settled?: boolean
+          type?: string
+          user_id?: string
+          wallet_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debts_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       monthly_snapshots: {
         Row: {
           created_at: string
