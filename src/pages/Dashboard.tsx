@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useWallets } from "@/hooks/useWallets";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useBudgetGoal } from "@/hooks/useBudgetGoals";
 import { useMonthRollover } from "@/hooks/useMonthRollover";
 import { useApplyRecurring } from "@/hooks/useRecurringTransactions";
-
+import { useDebts } from "@/hooks/useDebts";
 import { useCurrencyRates, convertToBDT } from "@/hooks/useCurrencyRates";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
@@ -21,8 +22,10 @@ const iconMap: Record<string, React.ElementType> = {
 };
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { data: wallets, isLoading: wLoading } = useWallets();
   const { data: rates } = useCurrencyRates();
+  const { data: debts } = useDebts();
   const currentMonth = format(new Date(), "yyyy-MM");
   
   const { data: transactions } = useTransactions({ month: currentMonth });
@@ -114,6 +117,27 @@ export default function Dashboard() {
           );
         })}
       </div>
+
+      {/* Debt summary widget */}
+      {debts && debts.length > 0 && (() => {
+        const borrowedRemaining = debts.filter((d: any) => d.type === "borrowed" && !d.settled).reduce((s: number, d: any) => s + Number(d.remaining_amount), 0);
+        const lentRemaining = debts.filter((d: any) => d.type === "lent" && !d.settled).reduce((s: number, d: any) => s + Number(d.remaining_amount), 0);
+        return (
+          <button onClick={() => navigate("/debts")} className="vault-card p-4 w-full text-left hover:bg-card/80 transition-colors">
+            <div className="flex items-center justify-between">
+              {borrowedRemaining > 0 && (
+                <span className="text-sm text-destructive font-medium tabular-nums">You owe: ৳{borrowedRemaining.toLocaleString()}</span>
+              )}
+              {lentRemaining > 0 && (
+                <span className="text-sm text-primary font-medium tabular-nums">Owed to you: ৳{lentRemaining.toLocaleString()}</span>
+              )}
+              {borrowedRemaining === 0 && lentRemaining === 0 && (
+                <span className="text-sm text-muted-foreground">All debts settled</span>
+              )}
+            </div>
+          </button>
+        );
+      })()}
 
       {/* Budget progress */}
       {budgetGoal && (

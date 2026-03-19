@@ -1,5 +1,5 @@
 import { Outlet, useLocation, Link } from "react-router-dom";
-import { LayoutDashboard, Calendar, BarChart3, Settings, LogOut, Target } from "lucide-react";
+import { LayoutDashboard, Calendar, BarChart3, Settings, LogOut, Target, Handshake } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
@@ -7,6 +7,7 @@ const navItems = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
   { to: "/calendar", icon: Calendar, label: "Calendar" },
   { to: "/goals", icon: Target, label: "Goals" },
+  { to: "/debts", icon: Handshake, label: "Debts" },
   { to: "/reports", icon: BarChart3, label: "Reports" },
   { to: "/settings", icon: Settings, label: "Settings" },
 ];

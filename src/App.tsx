@@ -14,6 +14,7 @@ import Dashboard from "@/pages/Dashboard";
 import CalendarPage from "@/pages/CalendarPage";
 import GoalsPage from "@/pages/GoalsPage";
 import Reports from "@/pages/Reports";
+import DebtsPage from "@/pages/DebtsPage";
 import SettingsPage from "@/pages/SettingsPage";
 import NotFound from "@/pages/NotFound";
 
@@ -35,6 +36,7 @@ const App = () => (
               <Route path="/" element={<Dashboard />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/goals" element={<GoalsPage />} />
+              <Route path="/debts" element={<DebtsPage />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<SettingsPage />} />
             </Route>
