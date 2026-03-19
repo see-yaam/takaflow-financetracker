@@ -121,7 +121,7 @@ export default function Reports() {
       </Select>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
           { label: "Total Income", value: totalIncome, prefix: "+", color: "text-primary" },
           { label: "Total Expense", value: totalExpense, prefix: "-", color: "text-foreground" },
