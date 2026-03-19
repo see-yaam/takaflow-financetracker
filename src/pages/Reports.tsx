@@ -121,7 +121,7 @@ export default function Reports() {
       </Select>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         {[
           { label: "Total Income", value: totalIncome, prefix: "+", color: "text-primary" },
           { label: "Total Expense", value: totalExpense, prefix: "-", color: "text-foreground" },
@@ -165,8 +165,8 @@ export default function Reports() {
       {/* Bar chart */}
       <div className="vault-card p-5">
         <h3 className="wallet-label mb-4">Daily Income vs Expense</h3>
-        <div className="h-64">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="h-64 overflow-x-auto">
+          <ResponsiveContainer width="100%" height="100%" minWidth={500}>
             <BarChart data={dailyData}>
               <XAxis dataKey="day" tick={{ fill: "hsl(155,20%,60%)", fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fill: "hsl(155,20%,60%)", fontSize: 10 }} tickLine={false} axisLine={false} />

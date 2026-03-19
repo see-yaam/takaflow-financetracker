@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import CurrencyDoodles from "@/components/CurrencyDoodles";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -25,12 +26,18 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background relative overflow-hidden">
-      <div className="currency-watermark top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-[-15deg]">৳</div>
-      <div className="vault-card p-8 w-full max-w-md relative z-10">
+    <div className="flex min-h-screen items-center justify-center bg-background relative overflow-hidden px-4">
+      <CurrencyDoodles />
+      <div
+        className="vault-card p-6 sm:p-8 w-full max-w-md relative z-10"
+        style={{
+          border: "1px solid rgba(57, 255, 20, 0.2)",
+          boxShadow: "0 0 40px rgba(57, 255, 20, 0.05)",
+        }}
+      >
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold tracking-tighter text-foreground">TakaFlow</h1>
-          <p className="text-muted-foreground mt-2 text-sm">Access your financial vault by login </p>
+          <p className="text-muted-foreground mt-2 text-sm">Access your financial vault by login</p>
         </div>
         <form onSubmit={handleLogin} className="space-y-4">
           <div className="space-y-2">
@@ -42,7 +49,7 @@ export default function Login() {
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@gmail.com"
               required
-              className="bg-secondary border-border"
+              className="bg-secondary border-border min-h-[44px]"
             />
           </div>
           <div className="space-y-2">
@@ -54,7 +61,7 @@ export default function Login() {
               onChange={(e) => setPassword(e.target.value)}
               placeholder="••••••••"
               required
-              className="bg-secondary border-border"
+              className="bg-secondary border-border min-h-[44px]"
             />
           </div>
           <div className="flex justify-end">
@@ -62,7 +69,14 @@ export default function Login() {
               Forgot Password?
             </Link>
           </div>
-          <Button type="submit" disabled={loading} className="w-full bg-primary hover:bg-primary/90 text-primary-foreground">
+          <Button
+            type="submit"
+            disabled={loading}
+            className="w-full min-h-[52px] text-white rounded-xl"
+            style={{ background: "#2d6a4f" }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = "#3a8a65")}
+            onMouseLeave={(e) => (e.currentTarget.style.background = "#2d6a4f")}
+          >
             {loading ? "Authenticating..." : "Enter Vault"}
           </Button>
         </form>
