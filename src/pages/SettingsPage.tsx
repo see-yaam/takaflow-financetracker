@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useWallets, useCreateWallet, useUpdateWallet, useDeleteWallet } from "@/hooks/useWallets";
 import { useBudgetGoal, useUpsertBudgetGoal } from "@/hooks/useBudgetGoals";
 import { useRecurringTransactions, useDeleteRecurring } from "@/hooks/useRecurringTransactions";
@@ -18,6 +19,7 @@ import { motion } from "framer-motion";
 
 export default function SettingsPage() {
   const { user, signOut } = useAuth();
+  const queryClient = useQueryClient();
   const { data: wallets } = useWallets();
   const createWallet = useCreateWallet();
   const updateWallet = useUpdateWallet();
@@ -47,14 +49,29 @@ export default function SettingsPage() {
     if (resetConfirm !== "RESET" || !user) return;
     setResetting(true);
     try {
-      const tables = ["transactions", "monthly_snapshots", "recurring_transactions", "savings_goals", "budget_goals", "wallets"] as const;
+      const tables = [
+        "debt_payments",
+        "debts",
+        "monthly_snapshots",
+        "recurring_transactions",
+        "budget_goals",
+        "savings_goals",
+        "transactions",
+        "wallets",
+      ] as const;
+
       for (const table of tables) {
-        await supabase.from(table).delete().eq("user_id", user.id);
+        const { error } = await supabase.from(table).delete().eq("user_id", user.id);
+        if (error) throw error;
       }
+
+      await queryClient.clear();
+      await signOut();
+
       toast.success("Account reset successfully. Starting fresh!");
       setResetOpen(false);
       setResetConfirm("");
-      window.location.href = "/onboarding";
+      window.location.href = "/login";
     } catch (e: any) {
       toast.error(e.message);
     } finally {
