@@ -22,8 +22,10 @@ const iconMap: Record<string, React.ElementType> = {
 };
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { data: wallets, isLoading: wLoading } = useWallets();
   const { data: rates } = useCurrencyRates();
+  const { data: debts } = useDebts();
   const currentMonth = format(new Date(), "yyyy-MM");
   
   const { data: transactions } = useTransactions({ month: currentMonth });
