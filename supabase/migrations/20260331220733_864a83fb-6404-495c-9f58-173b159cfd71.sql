@@ -1,0 +1,1 @@
+ALTER TABLE public.transactions ADD COLUMN is_reversed boolean NOT NULL DEFAULT false;
