@@ -47,7 +47,7 @@ export function useAddToGoal() {
         amount,
         category: "Savings Goal",
         note: "Savings goal contribution",
-        date: new Date().toISOString().split("T")[0],
+        date: new Date().toLocaleDateString("en-CA"),
       });
       if (txError) throw txError;
 

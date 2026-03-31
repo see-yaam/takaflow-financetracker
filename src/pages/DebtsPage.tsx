@@ -26,12 +26,12 @@ export default function DebtsPage() {
   const [personName, setPersonName] = useState("");
   const [amount, setAmount] = useState("");
   const [walletId, setWalletId] = useState("");
-  const [debtDate, setDebtDate] = useState(new Date().toISOString().split("T")[0]);
+  const [debtDate, setDebtDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [debtNote, setDebtNote] = useState("");
 
   const [payDialog, setPayDialog] = useState<any>(null);
   const [payAmount, setPayAmount] = useState("");
-  const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
+  const [payDate, setPayDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [payNote, setPayNote] = useState("");
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -180,7 +180,7 @@ export default function DebtsPage() {
             <Button
               onClick={() => {
                 setPayDialog(d);
-                setPayDate(new Date().toISOString().split("T")[0]);
+                setPayDate(new Date().toLocaleDateString("en-CA"));
               }}
               size="sm"
               className="bg-accent/15 text-accent hover:bg-accent/25 border-0"

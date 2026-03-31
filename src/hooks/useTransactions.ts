@@ -11,7 +11,8 @@ export function useTransactions(filters?: { month?: string; walletId?: string; c
       if (filters?.month) {
         const [y, m] = filters.month.split("-");
         const start = `${y}-${m}-01`;
-        const end = new Date(+y, +m, 0).toISOString().split("T")[0];
+        const lastDay = new Date(+y, +m, 0);
+        const end = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`;
         query = query.gte("date", start).lte("date", end);
       }
       if (filters?.walletId) query = query.eq("wallet_id", filters.walletId);
