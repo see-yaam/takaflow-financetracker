@@ -26,7 +26,7 @@ export default function DebtsPage() {
   const [personName, setPersonName] = useState("");
   const [amount, setAmount] = useState("");
   const [walletId, setWalletId] = useState("");
-  const [debtDate, setDebtDate] = useState(new Date().toISOString().split("T")[0]);
+  const [debtDate, setDebtDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [debtNote, setDebtNote] = useState("");
 
   const [payDialog, setPayDialog] = useState<any>(null);
