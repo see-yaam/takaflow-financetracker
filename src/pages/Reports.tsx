@@ -80,13 +80,14 @@ export default function Reports() {
   // Previous month summary for AI
   const prevMonthSummary = useMemo(() => {
     if (!prevTx?.length) return undefined;
+    const activePrev = prevTx.filter((t: any) => !t.is_reversed);
     const prevCategories: Record<string, number> = {};
-    prevTx.filter((t) => t.type === "expense").forEach((t) => {
+    activePrev.filter((t) => t.type === "expense").forEach((t) => {
       prevCategories[t.category] = (prevCategories[t.category] || 0) + Number(t.amount);
     });
     return {
-      totalIncome: prevTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0),
-      totalExpense: prevTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0),
+      totalIncome: activePrev.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0),
+      totalExpense: activePrev.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0),
       categories: prevCategories,
     };
   }, [prevTx]);
