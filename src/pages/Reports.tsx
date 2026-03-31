@@ -31,7 +31,8 @@ export default function Reports() {
   const prevMonth = format(subMonths(parse(month, "yyyy-MM", new Date()), 1), "yyyy-MM");
   const { data: prevTx } = useTransactions({ month: prevMonth });
 
-  const allTxForMonth = useTransactions({ month }).data || [];
+  const allTxRaw = useTransactions({ month }).data || [];
+  const allTxForMonth = allTxRaw.filter((t: any) => !t.is_reversed);
   const totalIncome = allTxForMonth.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const totalExpense = allTxForMonth.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const net = totalIncome - totalExpense;
