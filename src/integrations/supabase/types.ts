@@ -284,6 +284,7 @@ export type Database = {
           created_at: string
           date: string
           id: string
+          is_reversed: boolean
           note: string | null
           type: string
           user_id: string
@@ -295,6 +296,7 @@ export type Database = {
           created_at?: string
           date?: string
           id?: string
+          is_reversed?: boolean
           note?: string | null
           type: string
           user_id: string
@@ -306,6 +308,7 @@ export type Database = {
           created_at?: string
           date?: string
           id?: string
+          is_reversed?: boolean
           note?: string | null
           type?: string
           user_id?: string

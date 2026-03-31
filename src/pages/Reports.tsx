@@ -31,7 +31,8 @@ export default function Reports() {
   const prevMonth = format(subMonths(parse(month, "yyyy-MM", new Date()), 1), "yyyy-MM");
   const { data: prevTx } = useTransactions({ month: prevMonth });
 
-  const allTxForMonth = useTransactions({ month }).data || [];
+  const allTxRaw = useTransactions({ month }).data || [];
+  const allTxForMonth = allTxRaw.filter((t: any) => !t.is_reversed);
   const totalIncome = allTxForMonth.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const totalExpense = allTxForMonth.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const net = totalIncome - totalExpense;
@@ -79,13 +80,14 @@ export default function Reports() {
   // Previous month summary for AI
   const prevMonthSummary = useMemo(() => {
     if (!prevTx?.length) return undefined;
+    const activePrev = prevTx.filter((t: any) => !t.is_reversed);
     const prevCategories: Record<string, number> = {};
-    prevTx.filter((t) => t.type === "expense").forEach((t) => {
+    activePrev.filter((t) => t.type === "expense").forEach((t) => {
       prevCategories[t.category] = (prevCategories[t.category] || 0) + Number(t.amount);
     });
     return {
-      totalIncome: prevTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0),
-      totalExpense: prevTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0),
+      totalIncome: activePrev.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0),
+      totalExpense: activePrev.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0),
       categories: prevCategories,
     };
   }, [prevTx]);

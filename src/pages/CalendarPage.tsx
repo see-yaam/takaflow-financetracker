@@ -1,10 +1,15 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths } from "date-fns";
-import { useTransactions } from "@/hooks/useTransactions";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { useTransactions, useReverseTransaction } from "@/hooks/useTransactions";
+import { ChevronLeft, ChevronRight, Plus, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -12,9 +17,11 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [reverseTarget, setReverseTarget] = useState<any>(null);
 
   const month = format(currentDate, "yyyy-MM");
   const { data: transactions } = useTransactions({ month });
+  const reverseMutation = useReverseTransaction();
 
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(currentDate);
@@ -36,6 +43,7 @@ export default function CalendarPage() {
       if (!txs) continue;
       let income = 0, expense = 0;
       for (const t of txs) {
+        if ((t as any).is_reversed) continue;
         if (t.type === "income") income += Number(t.amount);
         else expense += Number(t.amount);
       }
@@ -46,6 +54,17 @@ export default function CalendarPage() {
 
   const selectedKey = selectedDate ? format(selectedDate, "yyyy-MM-dd") : null;
   const selectedTxs = selectedKey ? txByDate[selectedKey] || [] : [];
+
+  const handleReverse = () => {
+    if (!reverseTarget) return;
+    reverseMutation.mutate(reverseTarget.id, {
+      onSuccess: () => {
+        toast.success("Transaction reversed");
+        setReverseTarget(null);
+      },
+      onError: () => toast.error("Failed to reverse transaction"),
+    });
+  };
 
   const calendarGrid = (
     <div className="vault-card p-4">
@@ -133,24 +152,41 @@ export default function CalendarPage() {
             <p className="text-sm text-muted-foreground">No transactions on this date.</p>
           ) : (
             <div className="space-y-0">
-              {selectedTxs.map((t: any) => (
-                <div key={t.id} className="transaction-row">
-                  <div className="flex items-center gap-3">
-                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold ${t.type === "income" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
-                      {t.type === "income" ? "+" : "-"}
+              {selectedTxs.map((t: any) => {
+                const isReversed = t.is_reversed;
+                return (
+                  <div key={t.id} className={`transaction-row ${isReversed ? "opacity-50" : ""}`}>
+                    <div className="flex items-center gap-3">
+                      <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold ${t.type === "income" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
+                        {t.type === "income" ? "+" : "-"}
+                      </div>
+                      <div>
+                        <p className={`text-sm font-medium text-foreground ${isReversed ? "line-through" : ""}`}>
+                          {t.category}
+                          {isReversed && <span className="ml-2 text-[10px] bg-destructive/15 text-destructive px-1.5 py-0.5 rounded no-underline inline-block">Reversed</span>}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {t.wallets?.name}{t.note ? ` · ${t.note}` : ""}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{t.category}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {t.wallets?.name}{t.note ? ` · ${t.note}` : ""}
-                      </p>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-sm font-medium tabular-nums ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-destructive"}`}>
+                        {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      </span>
+                      {!isReversed && (
+                        <button
+                          onClick={() => setReverseTarget(t)}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                          title="Reverse"
+                        >
+                          <Undo2 className="h-3.5 w-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <span className={`text-sm font-medium tabular-nums ${t.type === "income" ? "text-primary" : "text-destructive"}`}>
-                    {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </motion.div>
@@ -188,6 +224,24 @@ export default function CalendarPage() {
         onOpenChange={setDrawerOpen}
         defaultDate={selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined}
       />
+
+      {/* Reverse confirmation dialog */}
+      <AlertDialog open={!!reverseTarget} onOpenChange={(open) => !open && setReverseTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reverse Transaction?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will undo this transaction and restore your wallet balance.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReverse} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Reverse
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

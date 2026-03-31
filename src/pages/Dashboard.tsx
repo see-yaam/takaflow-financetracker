@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallets } from "@/hooks/useWallets";
-import { useTransactions } from "@/hooks/useTransactions";
+import { useTransactions, useReverseTransaction } from "@/hooks/useTransactions";
 import { useBudgetGoal } from "@/hooks/useBudgetGoals";
 import { useMonthRollover } from "@/hooks/useMonthRollover";
 import { useApplyRecurring } from "@/hooks/useRecurringTransactions";
@@ -9,11 +9,15 @@ import { useDebts } from "@/hooks/useDebts";
 import { useCurrencyRates, convertToBDT } from "@/hooks/useCurrencyRates";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
-import { Smartphone, Landmark, Wallet, Plus, TrendingUp, TrendingDown, ArrowUpDown } from "lucide-react";
+import { Smartphone, Landmark, Wallet, Plus, TrendingUp, TrendingDown, ArrowUpDown, Undo2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
 import BudgetProgressBar from "@/components/BudgetProgressBar";
-
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { toast } from "sonner";
 
 const iconMap: Record<string, React.ElementType> = {
   smartphone: Smartphone,
@@ -27,18 +31,18 @@ export default function Dashboard() {
   const { data: rates } = useCurrencyRates();
   const { data: debts } = useDebts();
   const currentMonth = format(new Date(), "yyyy-MM");
-  
+
   const { data: transactions } = useTransactions({ month: currentMonth });
   const { data: budgetGoal } = useBudgetGoal(currentMonth);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerType, setDrawerType] = useState<"income" | "expense">("expense");
-  
-  const applyRecurring = useApplyRecurring();
+  const [reverseTarget, setReverseTarget] = useState<any>(null);
 
-  // Auto-rollover snapshots
+  const applyRecurring = useApplyRecurring();
+  const reverseMutation = useReverseTransaction();
+
   useMonthRollover();
 
-  // Apply recurring transactions on load
   useEffect(() => {
     applyRecurring.mutate();
   }, []); // eslint-disable-line
@@ -56,15 +60,25 @@ export default function Dashboard() {
     return s + convertToBDT(Number(w.balance), currency, rates);
   }, 0) || 0;
 
-  const monthIncome = transactions?.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0) || 0;
-  const monthExpense = transactions?.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0) || 0;
+  const activeTx = transactions?.filter((t: any) => !t.is_reversed) || [];
+  const monthIncome = activeTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
+  const monthExpense = activeTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const net = monthIncome - monthExpense;
-
-  
 
   const openDrawer = (type: "income" | "expense") => {
     setDrawerType(type);
     setDrawerOpen(true);
+  };
+
+  const handleReverse = () => {
+    if (!reverseTarget) return;
+    reverseMutation.mutate(reverseTarget.id, {
+      onSuccess: () => {
+        toast.success("Transaction reversed");
+        setReverseTarget(null);
+      },
+      onError: () => toast.error("Failed to reverse transaction"),
+    });
   };
 
   return (
@@ -182,27 +196,62 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground">No transactions yet. Start tracking your spending.</p>
         ) : (
           <div className="space-y-0">
-            {transactions.slice(0, 10).map((t) => (
-              <div key={t.id} className="transaction-row">
-                <div className="flex items-center gap-3">
-                  <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold ${t.type === "income" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
-                    {t.type === "income" ? "+" : "-"}
+            {transactions.slice(0, 10).map((t: any) => {
+              const isReversed = t.is_reversed;
+              return (
+                <div key={t.id} className={`transaction-row ${isReversed ? "opacity-50" : ""}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold ${t.type === "income" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
+                      {t.type === "income" ? "+" : "-"}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium text-foreground ${isReversed ? "line-through" : ""}`}>
+                        {t.category}
+                        {isReversed && <span className="ml-2 text-[10px] bg-destructive/15 text-destructive px-1.5 py-0.5 rounded no-underline inline-block">Reversed</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{t.note || (t as any).wallets?.name} · {format(new Date(t.date), "MMM d")}</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-foreground">{t.category}</p>
-                    <p className="text-xs text-muted-foreground">{t.note || (t as any).wallets?.name} · {format(new Date(t.date), "MMM d")}</p>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-sm font-medium tabular-nums ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
+                      {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </span>
+                    {!isReversed && (
+                      <button
+                        onClick={() => setReverseTarget(t)}
+                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        title="Reverse"
+                      >
+                        <Undo2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
-                <span className={`text-sm font-medium tabular-nums ${t.type === "income" ? "text-primary" : "text-foreground"}`}>
-                  {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
       <AddTransactionDrawer open={drawerOpen} onOpenChange={setDrawerOpen} defaultType={drawerType} />
+
+      {/* Reverse confirmation dialog */}
+      <AlertDialog open={!!reverseTarget} onOpenChange={(open) => !open && setReverseTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reverse Transaction?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will undo this transaction and restore your wallet balance.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleReverse} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Reverse
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

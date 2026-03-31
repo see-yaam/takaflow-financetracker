@@ -58,3 +58,20 @@ export function useDeleteTransaction() {
     },
   });
 }
+
+export function useReverseTransaction() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ is_reversed: true } as any)
+        .eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      qc.invalidateQueries({ queryKey: ["wallets"] });
+    },
+  });
+}
