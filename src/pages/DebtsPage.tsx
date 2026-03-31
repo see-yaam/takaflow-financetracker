@@ -180,7 +180,7 @@ export default function DebtsPage() {
             <Button
               onClick={() => {
                 setPayDialog(d);
-                setPayDate(new Date().toISOString().split("T")[0]);
+                setPayDate(new Date().toLocaleDateString("en-CA"));
               }}
               size="sm"
               className="bg-accent/15 text-accent hover:bg-accent/25 border-0"

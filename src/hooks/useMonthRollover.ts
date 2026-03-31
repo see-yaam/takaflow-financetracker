@@ -33,7 +33,8 @@ export function useMonthRollover() {
       // Get previous month transactions
       const [y, m] = prevMonth.split("-");
       const start = `${y}-${m}-01`;
-      const end = new Date(+y, +m, 0).toISOString().split("T")[0];
+      const lastDay = new Date(+y, +m, 0);
+      const end = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`;
 
       const { data: txs } = await supabase
         .from("transactions")
