@@ -31,7 +31,7 @@ export default function DebtsPage() {
 
   const [payDialog, setPayDialog] = useState<any>(null);
   const [payAmount, setPayAmount] = useState("");
-  const [payDate, setPayDate] = useState(new Date().toISOString().split("T")[0]);
+  const [payDate, setPayDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [payNote, setPayNote] = useState("");
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
