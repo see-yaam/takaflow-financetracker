@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useDebts, useAllDebtPayments, useCreateDebt, useAddDebtPayment } from "@/hooks/useDebts";
+import { useDebts, useAllDebtPayments, useCreateDebt, useAddDebtPayment, useAllDebtAdditions, useAddDebtAddition } from "@/hooks/useDebts";
 import { useWallets } from "@/hooks/useWallets";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
@@ -10,16 +10,18 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
-import { Plus, Handshake, ChevronDown, ChevronUp } from "lucide-react";
+import { Plus, Handshake, ChevronDown, ChevronUp, PlusCircle } from "lucide-react";
 import { format } from "date-fns";
 
 export default function DebtsPage() {
   const { user } = useAuth();
   const { data: debts, isLoading } = useDebts();
   const { data: allPayments } = useAllDebtPayments();
+  const { data: allAdditions } = useAllDebtAdditions();
   const { data: wallets } = useWallets();
   const createDebt = useCreateDebt();
   const addPayment = useAddDebtPayment();
+  const addAddition = useAddDebtAddition();
 
   const [showCreate, setShowCreate] = useState(false);
   const [debtType, setDebtType] = useState<"borrowed" | "lent">("borrowed");
@@ -33,6 +35,11 @@ export default function DebtsPage() {
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [payNote, setPayNote] = useState("");
+
+  const [addMoreDialog, setAddMoreDialog] = useState<any>(null);
+  const [addMoreAmount, setAddMoreAmount] = useState("");
+  const [addMoreDate, setAddMoreDate] = useState(new Date().toLocaleDateString("en-CA"));
+  const [addMoreNote, setAddMoreNote] = useState("");
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -105,6 +112,39 @@ export default function DebtsPage() {
     }
   };
 
+  const handleAddMore = async () => {
+    if (!addMoreDialog || !addMoreAmount) {
+      toast.error("Enter amount");
+      return;
+    }
+    const amt = parseFloat(addMoreAmount);
+    if (amt <= 0) {
+      toast.error("Amount must be positive");
+      return;
+    }
+    if (addMoreDialog.type === "lent") {
+      const w = wallets?.find((w) => w.id === addMoreDialog.wallet_id);
+      if (w && Number(w.balance) < amt) {
+        toast.error("Insufficient wallet balance");
+        return;
+      }
+    }
+    try {
+      await addAddition.mutateAsync({
+        debtId: addMoreDialog.id,
+        amount: amt,
+        date: addMoreDate,
+        note: addMoreNote || undefined,
+      });
+      toast.success("Amount added to debt!");
+      setAddMoreDialog(null);
+      setAddMoreAmount("");
+      setAddMoreNote("");
+    } catch (e: any) {
+      toast.error(e.message);
+    }
+  };
+
   const borrowed = debts?.filter((d: any) => d.type === "borrowed") || [];
   const lent = debts?.filter((d: any) => d.type === "lent") || [];
 
@@ -119,6 +159,9 @@ export default function DebtsPage() {
   const getPaymentsForDebt = (debtId: string) =>
     (allPayments || []).filter((p: any) => p.debt_id === debtId);
 
+  const getAdditionsForDebt = (debtId: string) =>
+    (allAdditions || []).filter((a: any) => a.debt_id === debtId);
+
   if (isLoading) {
     return <div className="flex items-center justify-center h-64 text-muted-foreground animate-pulse">Loading debts...</div>;
   }
@@ -126,7 +169,11 @@ export default function DebtsPage() {
   const renderDebtCard = (d: any, i: number) => {
     const pct = Number(d.amount) > 0 ? Math.min(((Number(d.amount) - Number(d.remaining_amount)) / Number(d.amount)) * 100, 100) : 0;
     const payments = getPaymentsForDebt(d.id);
+    const additions = getAdditionsForDebt(d.id);
+    const totalAdditions = additions.reduce((s: number, a: any) => s + Number(a.amount), 0);
     const isExpanded = expanded[d.id];
+    // Original amount = current total - all additions
+    const originalAmount = Number(d.amount) - totalAdditions;
 
     return (
       <motion.div
@@ -149,10 +196,27 @@ export default function DebtsPage() {
         </div>
 
         <div className="space-y-1 mb-3 text-sm">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Original</span>
-            <span className="tabular-nums text-foreground">৳{Number(d.amount).toLocaleString()}</span>
-          </div>
+          {totalAdditions > 0 ? (
+            <>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Original</span>
+                <span className="tabular-nums text-foreground">৳{originalAmount.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Added</span>
+                <span className="tabular-nums text-accent">+৳{totalAdditions.toLocaleString()}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total</span>
+                <span className="tabular-nums text-foreground font-medium">৳{Number(d.amount).toLocaleString()}</span>
+              </div>
+            </>
+          ) : (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Original</span>
+              <span className="tabular-nums text-foreground">৳{Number(d.amount).toLocaleString()}</span>
+            </div>
+          )}
           <div className="flex justify-between">
             <span className="text-muted-foreground">{d.type === "borrowed" ? "Paid back" : "Recovered"}</span>
             <span className="tabular-nums text-primary">৳{(Number(d.amount) - Number(d.remaining_amount)).toLocaleString()}</span>
@@ -175,20 +239,32 @@ export default function DebtsPage() {
           <p className="text-xs text-muted-foreground mt-1 tabular-nums">{pct.toFixed(0)}% {d.type === "borrowed" ? "repaid" : "recovered"}</p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           {!d.settled && (
-            <Button
-              onClick={() => {
-                setPayDialog(d);
-                setPayDate(new Date().toLocaleDateString("en-CA"));
-              }}
-              size="sm"
-              className="bg-accent/15 text-accent hover:bg-accent/25 border-0"
-            >
-              {d.type === "borrowed" ? "Add Repayment" : "Add Recovery"}
-            </Button>
+            <>
+              <Button
+                onClick={() => {
+                  setPayDialog(d);
+                  setPayDate(new Date().toLocaleDateString("en-CA"));
+                }}
+                size="sm"
+                className="bg-accent/15 text-accent hover:bg-accent/25 border-0"
+              >
+                {d.type === "borrowed" ? "Add Repayment" : "Add Recovery"}
+              </Button>
+              <Button
+                onClick={() => {
+                  setAddMoreDialog(d);
+                  setAddMoreDate(new Date().toLocaleDateString("en-CA"));
+                }}
+                size="sm"
+                className="bg-primary/15 text-primary hover:bg-primary/25 border-0"
+              >
+                <PlusCircle className="h-3.5 w-3.5 mr-1" /> Add More
+              </Button>
+            </>
           )}
-          {payments.length > 0 && (
+          {(payments.length > 0 || additions.length > 0) && (
             <Button
               onClick={() => setExpanded((prev) => ({ ...prev, [d.id]: !prev[d.id] }))}
               size="sm"
@@ -196,22 +272,41 @@ export default function DebtsPage() {
               className="text-muted-foreground"
             >
               {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              <span className="ml-1 text-xs">{payments.length} payment{payments.length !== 1 ? "s" : ""}</span>
+              <span className="ml-1 text-xs">History</span>
             </Button>
           )}
         </div>
 
-        {isExpanded && payments.length > 0 && (
+        {isExpanded && (payments.length > 0 || additions.length > 0) && (
           <div className="mt-3 pt-3 border-t border-border/30 space-y-2">
-            {payments.map((p: any) => (
-              <div key={p.id} className="flex items-center justify-between text-sm">
-                <div>
-                  <span className="text-muted-foreground">{format(new Date(p.date), "MMM d, yyyy")}</span>
-                  {p.note && <span className="text-muted-foreground ml-2">· {p.note}</span>}
-                </div>
-                <span className="tabular-nums text-primary font-medium">৳{Number(p.amount).toLocaleString()}</span>
-              </div>
-            ))}
+            {additions.length > 0 && (
+              <>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Additions</p>
+                {additions.map((a: any) => (
+                  <div key={a.id} className="flex items-center justify-between text-sm">
+                    <div>
+                      <span className="text-muted-foreground">{format(new Date(a.date), "MMM d, yyyy")}</span>
+                      {a.note && <span className="text-muted-foreground ml-2">· {a.note}</span>}
+                    </div>
+                    <span className="tabular-nums text-accent font-medium">+৳{Number(a.amount).toLocaleString()}</span>
+                  </div>
+                ))}
+              </>
+            )}
+            {payments.length > 0 && (
+              <>
+                <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-2">Payments</p>
+                {payments.map((p: any) => (
+                  <div key={p.id} className="flex items-center justify-between text-sm">
+                    <div>
+                      <span className="text-muted-foreground">{format(new Date(p.date), "MMM d, yyyy")}</span>
+                      {p.note && <span className="text-muted-foreground ml-2">· {p.note}</span>}
+                    </div>
+                    <span className="tabular-nums text-primary font-medium">৳{Number(p.amount).toLocaleString()}</span>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
       </motion.div>
@@ -397,6 +492,44 @@ export default function DebtsPage() {
             </div>
             <Button onClick={handlePayment} disabled={addPayment.isPending} className="w-full bg-accent text-accent-foreground">
               {addPayment.isPending ? "Recording..." : "Record Payment"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add More Dialog */}
+      <Dialog open={!!addMoreDialog} onOpenChange={(open) => !open && setAddMoreDialog(null)}>
+        <DialogContent className="bg-card border-border">
+          <DialogHeader>
+            <DialogTitle className="text-foreground">
+              Add More to Debt
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Adding more {addMoreDialog?.type === "borrowed" ? "borrowed amount from" : "lent amount to"} <strong className="text-foreground">{addMoreDialog?.person_name}</strong>
+              <br />Current total: <strong className="text-foreground">৳{Number(addMoreDialog?.amount || 0).toLocaleString()}</strong>
+            </p>
+            <div className="space-y-2">
+              <Label>Amount</Label>
+              <Input
+                type="number"
+                value={addMoreAmount}
+                onChange={(e) => setAddMoreAmount(e.target.value)}
+                placeholder="1000"
+                className="bg-secondary border-border"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>Date</Label>
+              <Input type="date" value={addMoreDate} onChange={(e) => setAddMoreDate(e.target.value)} className="bg-secondary border-border" />
+            </div>
+            <div className="space-y-2">
+              <Label>Note (optional)</Label>
+              <Input value={addMoreNote} onChange={(e) => setAddMoreNote(e.target.value)} placeholder="e.g. Second loan" className="bg-secondary border-border" />
+            </div>
+            <Button onClick={handleAddMore} disabled={addAddition.isPending} className="w-full bg-primary text-primary-foreground">
+              {addAddition.isPending ? "Adding..." : "Add Amount"}
             </Button>
           </div>
         </DialogContent>
