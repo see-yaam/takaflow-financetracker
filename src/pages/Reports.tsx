@@ -246,17 +246,28 @@ export default function Reports() {
           <p className="text-sm text-muted-foreground">No transactions found.</p>
         ) : (
           <div className="space-y-0">
-            {transactions.map((t: any) => (
-              <div key={t.id} className="transaction-row">
-                <div>
-                  <p className="text-sm font-medium text-foreground">{t.category}</p>
-                  <p className="text-xs text-muted-foreground">{t.wallets?.name} · {format(new Date(t.date), "MMM d")}{t.note ? ` · ${t.note}` : ""}</p>
+            {transactions.map((t: any) => {
+              const isReversed = t.is_reversed;
+              return (
+                <div key={t.id} className={`transaction-row ${isReversed ? "opacity-50" : ""}`}>
+                  <div className="flex items-center gap-3">
+                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold ${t.type === "income" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
+                      {t.type === "income" ? "+" : "-"}
+                    </div>
+                    <div>
+                      <p className={`text-sm font-medium text-foreground ${isReversed ? "line-through" : ""}`}>
+                        {t.category}
+                        {isReversed && <span className="ml-2 text-[10px] bg-destructive/15 text-destructive px-1.5 py-0.5 rounded no-underline inline-block">Reversed</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{t.wallets?.name} · {format(new Date(t.date), "MMM d")}{t.note ? ` · ${t.note}` : ""}</p>
+                    </div>
+                  </div>
+                  <span className={`text-sm font-medium tabular-nums ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
+                    {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  </span>
                 </div>
-                <span className={`text-sm font-medium tabular-nums ${t.type === "income" ? "text-primary" : "text-foreground"}`}>
-                  {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
