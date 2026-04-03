@@ -167,3 +167,53 @@ export function useAddDebtPayment() {
     },
   });
 }
+
+export function useAllDebtAdditions() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["debt_additions_all", user?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("debt_additions" as any)
+        .select("*")
+        .order("date", { ascending: false });
+      if (error) throw error;
+      return data as any[];
+    },
+    enabled: !!user,
+  });
+}
+
+export function useAddDebtAddition() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: async ({
+      debtId,
+      amount,
+      date,
+      note,
+    }: {
+      debtId: string;
+      amount: number;
+      date: string;
+      note?: string;
+    }) => {
+      const { error } = await supabase
+        .from("debt_additions" as any)
+        .insert({
+          debt_id: debtId,
+          user_id: user!.id,
+          amount,
+          date,
+          note: note || null,
+        });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["debts"] });
+      qc.invalidateQueries({ queryKey: ["debt_additions_all"] });
+      qc.invalidateQueries({ queryKey: ["wallets"] });
+    },
+  });
+}

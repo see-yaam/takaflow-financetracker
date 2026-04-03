@@ -52,6 +52,7 @@ export default function SettingsPage() {
     setResetting(true);
     try {
       const tables = [
+        "debt_additions",
         "debt_payments",
         "debts",
         "monthly_snapshots",
