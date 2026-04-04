@@ -108,11 +108,11 @@ export default function Reports() {
   }, [snapshots, wallets]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-full overflow-hidden">
       <h2 className="text-xl font-bold tracking-tight text-foreground">Monthly Report</h2>
 
       <Select value={month} onValueChange={setMonth}>
-        <SelectTrigger className="w-48 bg-secondary border-border">
+        <SelectTrigger className="w-full md:w-48 bg-secondary border-border min-h-[48px] md:min-h-0 text-sm md:text-xs">
           <SelectValue />
         </SelectTrigger>
         <SelectContent className="bg-popover border-border">
@@ -131,9 +131,9 @@ export default function Reports() {
           { label: "Avg Daily Spend", value: avgDaily, prefix: "", color: "text-muted-foreground" },
           { label: "Avg Daily Income", value: avgDailyIncome, prefix: "", color: "text-muted-foreground" },
         ].map((s, i) => (
-          <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="vault-card p-4">
-            <p className="wallet-label text-[10px] mb-1">{s.label}</p>
-            <p className={`text-lg font-bold tabular-nums ${s.color}`}>
+          <motion.div key={s.label} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="vault-card p-4 min-w-0">
+            <p className="wallet-label text-[10px] md:text-[10px] mb-1 break-words">{s.label}</p>
+            <p className={`text-base md:text-lg font-bold tabular-nums ${s.color} break-all`}>
               {s.prefix}৳{Math.abs(s.value).toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </p>
           </motion.div>
@@ -142,21 +142,21 @@ export default function Reports() {
 
       {/* Wallet breakdown from snapshots */}
       {walletBreakdown && walletBreakdown.length > 0 && (
-        <div className="vault-card p-5">
+        <div className="vault-card p-4 md:p-5 overflow-hidden">
           <h3 className="wallet-label mb-4">Wallet Breakdown</h3>
           <div className="space-y-3">
             {walletBreakdown.map((wb) => (
-              <div key={wb.name} className="p-3 rounded-xl bg-secondary/50 border border-border/30">
-                <p className="text-sm font-medium text-foreground mb-2">{wb.name}</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+              <div key={wb.name} className="p-3 rounded-xl bg-secondary/50 border border-border/30 min-w-0">
+                <p className="text-sm font-medium text-foreground mb-2 break-words">{wb.name}</p>
+                <div className="grid grid-cols-2 gap-x-2 md:gap-x-4 gap-y-1 text-xs">
                   <span className="text-muted-foreground">Opening</span>
-                  <span className="tabular-nums text-right text-foreground">৳{wb.openingBalance.toLocaleString()}</span>
+                  <span className="tabular-nums text-right text-foreground break-all">৳{wb.openingBalance.toLocaleString()}</span>
                   <span className="text-muted-foreground">+ Income</span>
-                  <span className="tabular-nums text-right text-primary">+৳{wb.income.toLocaleString()}</span>
+                  <span className="tabular-nums text-right text-primary break-all">+৳{wb.income.toLocaleString()}</span>
                   <span className="text-muted-foreground">- Expense</span>
-                  <span className="tabular-nums text-right text-foreground">-৳{wb.expense.toLocaleString()}</span>
+                  <span className="tabular-nums text-right text-foreground break-all">-৳{wb.expense.toLocaleString()}</span>
                   <span className="text-muted-foreground font-medium">= Closing</span>
-                  <span className="tabular-nums text-right font-medium text-foreground">৳{wb.closingBalance.toLocaleString()}</span>
+                  <span className="tabular-nums text-right font-medium text-foreground break-all">৳{wb.closingBalance.toLocaleString()}</span>
                 </div>
               </div>
             ))}
@@ -165,13 +165,13 @@ export default function Reports() {
       )}
 
       {/* Bar chart */}
-      <div className="vault-card p-5">
+      <div className="vault-card p-4 md:p-5 overflow-hidden">
         <h3 className="wallet-label mb-4">Daily Income vs Expense</h3>
-        <div className="h-64 overflow-x-auto">
-          <ResponsiveContainer width="100%" height="100%" minWidth={500}>
+        <div className="h-64 overflow-x-auto -mx-2 px-2">
+          <ResponsiveContainer width="100%" height="100%" minWidth={400}>
             <BarChart data={dailyData}>
               <XAxis dataKey="day" tick={{ fill: "hsl(155,20%,60%)", fontSize: 10 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: "hsl(155,20%,60%)", fontSize: 10 }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fill: "hsl(155,20%,60%)", fontSize: 10 }} tickLine={false} axisLine={false} width={40} />
               <Tooltip contentStyle={{ backgroundColor: "hsl(150,30%,12%)", border: "1px solid hsl(150,15%,20%)", borderRadius: "12px", color: "#fff" }} />
               <Bar dataKey="income" fill="hsl(152,38%,52%)" radius={[4, 4, 0, 0]} />
               <Bar dataKey="expense" fill="hsl(16,72%,61%)" radius={[4, 4, 0, 0]} />
@@ -182,7 +182,7 @@ export default function Reports() {
 
       {/* Pie chart */}
       {categoryData.length > 0 && (
-        <div className="vault-card p-5">
+        <div className="vault-card p-4 md:p-5 overflow-hidden">
           <h3 className="wallet-label mb-4">Expense by Category</h3>
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
@@ -220,11 +220,11 @@ export default function Reports() {
       )}
 
       {/* Filtered transaction list */}
-      <div className="vault-card p-5">
+      <div className="vault-card p-4 md:p-5 overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <h3 className="wallet-label">Transactions</h3>
           <Select value={filterWallet} onValueChange={setFilterWallet}>
-            <SelectTrigger className="w-32 bg-secondary border-border h-8 text-xs">
+            <SelectTrigger className="w-full md:w-32 bg-secondary border-border min-h-[48px] md:min-h-[32px] text-sm md:text-xs">
               <SelectValue placeholder="Wallet" />
             </SelectTrigger>
             <SelectContent className="bg-popover border-border">
@@ -233,7 +233,7 @@ export default function Reports() {
             </SelectContent>
           </Select>
           <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-32 bg-secondary border-border h-8 text-xs">
+            <SelectTrigger className="w-full md:w-32 bg-secondary border-border min-h-[48px] md:min-h-[32px] text-sm md:text-xs">
               <SelectValue placeholder="Category" />
             </SelectTrigger>
             <SelectContent className="bg-popover border-border">
@@ -250,19 +250,19 @@ export default function Reports() {
               const isReversed = t.is_reversed;
               return (
                 <div key={t.id} className={`transaction-row ${isReversed ? "opacity-50" : ""}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold ${t.type === "income" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`h-8 w-8 shrink-0 rounded-lg flex items-center justify-center text-xs font-bold ${t.type === "income" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
                       {t.type === "income" ? "+" : "-"}
                     </div>
-                    <div>
-                      <p className={`text-sm font-medium text-foreground ${isReversed ? "line-through" : ""}`}>
+                    <div className="min-w-0">
+                      <p className={`text-sm font-medium text-foreground break-words ${isReversed ? "line-through" : ""}`}>
                         {t.category}
                         {isReversed && <span className="ml-2 text-[10px] bg-destructive/15 text-destructive px-1.5 py-0.5 rounded no-underline inline-block">Reversed</span>}
                       </p>
-                      <p className="text-xs text-muted-foreground">{t.wallets?.name} · {format(new Date(t.date), "MMM d")}{t.note ? ` · ${t.note}` : ""}</p>
+                      <p className="text-xs text-muted-foreground break-words">{t.wallets?.name} · {format(new Date(t.date), "MMM d")}{t.note ? ` · ${t.note}` : ""}</p>
                     </div>
                   </div>
-                  <span className={`text-sm font-medium tabular-nums ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
+                  <span className={`text-sm font-medium tabular-nums shrink-0 ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
                     {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                   </span>
                 </div>
