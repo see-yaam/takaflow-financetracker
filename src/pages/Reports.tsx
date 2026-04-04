@@ -167,8 +167,8 @@ export default function Reports() {
       {/* Bar chart */}
       <div className="vault-card p-4 md:p-5 overflow-hidden">
         <h3 className="wallet-label mb-4">Daily Income vs Expense</h3>
-        <div className="h-64 overflow-x-auto -mx-2 px-2">
-          <ResponsiveContainer width="100%" height="100%" minWidth={400}>
+        <div className="w-full overflow-hidden" style={{ height: 256 }}>
+          <ResponsiveContainer width="100%" height="100%">
             <BarChart data={dailyData}>
               <XAxis dataKey="day" tick={{ fill: "hsl(155,20%,60%)", fontSize: 10 }} tickLine={false} axisLine={false} />
               <YAxis tick={{ fill: "hsl(155,20%,60%)", fontSize: 10 }} tickLine={false} axisLine={false} width={40} />
