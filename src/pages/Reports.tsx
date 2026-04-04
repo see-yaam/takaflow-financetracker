@@ -108,7 +108,7 @@ export default function Reports() {
   }, [snapshots, wallets]);
 
   return (
-    <div className="space-y-6 max-w-full overflow-hidden">
+    <div className="space-y-6 w-full max-w-[100vw] overflow-x-hidden box-border">
       <h2 className="text-xl font-bold tracking-tight text-foreground">Monthly Report</h2>
 
       <Select value={month} onValueChange={setMonth}>
