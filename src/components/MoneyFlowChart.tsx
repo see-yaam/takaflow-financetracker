@@ -70,10 +70,10 @@ export default function MoneyFlowChart({ incomeByCategory, expenseByCategory }: 
   const rightX = svgWidth - barWidth - 20;
 
   return (
-    <div className="vault-card p-5">
+    <div className="vault-card p-4 md:p-5 overflow-hidden">
       <h3 className="wallet-label mb-4">Money Flow</h3>
-      <div className="overflow-x-auto">
-        <svg width={svgWidth} height={chartHeight + 40} viewBox={`0 0 ${svgWidth} ${chartHeight + 40}`} className="w-full">
+      <div className="w-full overflow-hidden">
+        <svg viewBox={`0 0 ${svgWidth} ${chartHeight + 40}`} className="w-full h-auto" preserveAspectRatio="xMidYMid meet">
           {/* Labels */}
           <text x={leftX} y={15} fill="hsl(152,38%,52%)" fontSize={11} fontWeight={600}>INCOME</text>
           <text x={rightX + barWidth} y={15} fill="hsl(16,72%,61%)" fontSize={11} fontWeight={600} textAnchor="end">EXPENSE</text>
