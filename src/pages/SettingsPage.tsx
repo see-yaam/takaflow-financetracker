@@ -237,25 +237,6 @@ export default function SettingsPage() {
         )}
       </div>
 
-      {/* Badges */}
-      <div className="vault-card p-5">
-        <h3 className="wallet-label mb-4 flex items-center gap-2"><Award className="h-3 w-3" /> Badges</h3>
-        <div className="grid grid-cols-2 gap-3">
-          {badges.map((b) => (
-            <div
-              key={b.id}
-              className={`p-3 rounded-xl border border-border/30 ${b.earned ? "bg-primary/10" : "bg-secondary/30 opacity-50"}`}
-            >
-              <div className="flex items-center gap-2 mb-1">
-                <span className="text-xl">{b.emoji}</span>
-                <span className="text-sm font-medium text-foreground">{b.name}</span>
-              </div>
-              <p className="text-xs text-muted-foreground">{b.description}</p>
-              {b.earned && <p className="text-[10px] text-primary mt-1 font-medium">Earned!</p>}
-            </div>
-          ))}
-        </div>
-      </div>
 
       {/* Account */}
       <div className="vault-card p-5">
