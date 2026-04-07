@@ -211,19 +211,6 @@ export default function SettingsPage() {
         <Button onClick={handleTransfer} className="mt-3 bg-primary text-primary-foreground">Execute Transfer</Button>
       </div>
 
-      {/* Budget goal */}
-      <div className="vault-card p-5">
-        <h3 className="wallet-label mb-4">Monthly Budget Goal</h3>
-        {budgetGoal && (
-          <p className="text-sm text-muted-foreground mb-3 tabular-nums">
-            Current: ৳{Number(budgetGoal.monthly_budget).toLocaleString("en-US", { minimumFractionDigits: 2 })} for {format(new Date(), "MMMM yyyy")}
-          </p>
-        )}
-        <div className="flex gap-2">
-          <Input type="number" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} placeholder="Monthly budget" className="bg-secondary border-border" />
-          <Button onClick={handleSetBudget} className="bg-primary text-primary-foreground">Set</Button>
-        </div>
-      </div>
 
       {/* Recurring Transactions */}
       <div className="vault-card p-5">
