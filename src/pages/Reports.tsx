@@ -42,6 +42,15 @@ export default function Reports() {
   const avgDaily = totalExpense / (daysInMonth || 1);
   const avgDailyIncome = totalIncome / (daysInMonth || 1);
 
+  // Days left and prev month daily avg for AI
+  const today = new Date();
+  const monthEnd = lastDayOfMonth(parse(month, "yyyy-MM", new Date()));
+  const daysLeftInMonth = Math.max(differenceInDays(monthEnd, today), 0);
+  const prevMonthDays = getDaysInMonth(parse(prevMonth, "yyyy-MM", new Date()));
+  const prevActiveTx = (prevTx || []).filter((t: any) => !t.is_reversed);
+  const prevTotalExpense = prevActiveTx.filter((t: any) => t.type === "expense").reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const prevDailyAvgSpend = prevTotalExpense / (prevMonthDays || 1);
+
   // Category data
   const expenseCategoryMap = useMemo(() => {
     const map: Record<string, number> = {};
