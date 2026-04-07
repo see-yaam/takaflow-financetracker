@@ -26,8 +26,6 @@ export default function SettingsPage() {
   const updateWallet = useUpdateWallet();
   const deleteWallet = useDeleteWallet();
   const currentMonth = format(new Date(), "yyyy-MM");
-  const { data: budgetGoal } = useBudgetGoal(currentMonth);
-  const upsertBudget = useUpsertBudgetGoal();
   const { data: recurrings } = useRecurringTransactions();
   const deleteRecurring = useDeleteRecurring();
   const { badges } = useStreaks();
