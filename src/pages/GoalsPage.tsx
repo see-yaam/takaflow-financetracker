@@ -81,6 +81,8 @@ export default function GoalsPage() {
 
   return (
     <div className="space-y-6">
+      <MonthlyBudgetCard />
+
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <Target className="h-5 w-5 text-accent" /> Dream Jar
