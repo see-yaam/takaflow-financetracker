@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWallets, useCreateWallet, useUpdateWallet, useDeleteWallet } from "@/hooks/useWallets";
-import { useBudgetGoal, useUpsertBudgetGoal } from "@/hooks/useBudgetGoals";
+import { useRecurringTransactions, useDeleteRecurring } from "@/hooks/useRecurringTransactions";
 import { useRecurringTransactions, useDeleteRecurring } from "@/hooks/useRecurringTransactions";
 import { useStreaks } from "@/hooks/useStreaks";
 import { useAuth } from "@/contexts/AuthContext";
