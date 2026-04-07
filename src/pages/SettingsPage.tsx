@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useWallets, useCreateWallet, useUpdateWallet, useDeleteWallet } from "@/hooks/useWallets";
-import { useBudgetGoal, useUpsertBudgetGoal } from "@/hooks/useBudgetGoals";
 import { useRecurringTransactions, useDeleteRecurring } from "@/hooks/useRecurringTransactions";
 import { useStreaks } from "@/hooks/useStreaks";
 import { useAuth } from "@/contexts/AuthContext";
@@ -26,8 +25,6 @@ export default function SettingsPage() {
   const updateWallet = useUpdateWallet();
   const deleteWallet = useDeleteWallet();
   const currentMonth = format(new Date(), "yyyy-MM");
-  const { data: budgetGoal } = useBudgetGoal(currentMonth);
-  const upsertBudget = useUpsertBudgetGoal();
   const { data: recurrings } = useRecurringTransactions();
   const deleteRecurring = useDeleteRecurring();
   const { badges } = useStreaks();
@@ -35,7 +32,7 @@ export default function SettingsPage() {
   const [newWalletName, setNewWalletName] = useState("");
   const [newWalletBalance, setNewWalletBalance] = useState("");
   const [newWalletCurrency, setNewWalletCurrency] = useState("BDT");
-  const [budgetInput, setBudgetInput] = useState("");
+  
   const [editingWallet, setEditingWallet] = useState<{ id: string; name: string } | null>(null);
   const [editName, setEditName] = useState("");
 
@@ -110,15 +107,6 @@ export default function SettingsPage() {
     } catch (e: any) { toast.error(e.message); }
   };
 
-  const handleSetBudget = async () => {
-    const val = parseFloat(budgetInput);
-    if (!val || val <= 0) return;
-    try {
-      await upsertBudget.mutateAsync({ month: currentMonth, monthly_budget: val });
-      setBudgetInput("");
-      toast.success("Budget goal set");
-    } catch (e: any) { toast.error(e.message); }
-  };
 
   const handleTransfer = async () => {
     const amt = parseFloat(transferAmount);
@@ -223,19 +211,6 @@ export default function SettingsPage() {
         <Button onClick={handleTransfer} className="mt-3 bg-primary text-primary-foreground">Execute Transfer</Button>
       </div>
 
-      {/* Budget goal */}
-      <div className="vault-card p-5">
-        <h3 className="wallet-label mb-4">Monthly Budget Goal</h3>
-        {budgetGoal && (
-          <p className="text-sm text-muted-foreground mb-3 tabular-nums">
-            Current: ৳{Number(budgetGoal.monthly_budget).toLocaleString("en-US", { minimumFractionDigits: 2 })} for {format(new Date(), "MMMM yyyy")}
-          </p>
-        )}
-        <div className="flex gap-2">
-          <Input type="number" value={budgetInput} onChange={(e) => setBudgetInput(e.target.value)} placeholder="Monthly budget" className="bg-secondary border-border" />
-          <Button onClick={handleSetBudget} className="bg-primary text-primary-foreground">Set</Button>
-        </div>
-      </div>
 
       {/* Recurring Transactions */}
       <div className="vault-card p-5">

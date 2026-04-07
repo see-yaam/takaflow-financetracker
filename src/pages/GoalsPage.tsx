@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSavingsGoals, useCreateSavingsGoal, useAddToGoal, useDeleteSavingsGoal } from "@/hooks/useSavingsGoals";
+import MonthlyBudgetCard from "@/components/MonthlyBudgetCard";
 import { useWallets } from "@/hooks/useWallets";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useAuth } from "@/contexts/AuthContext";
@@ -80,6 +81,8 @@ export default function GoalsPage() {
 
   return (
     <div className="space-y-6">
+      <MonthlyBudgetCard />
+
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <Target className="h-5 w-5 text-accent" /> Dream Jar
