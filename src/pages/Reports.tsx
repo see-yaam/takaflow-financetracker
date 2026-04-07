@@ -2,7 +2,8 @@ import { useState, useMemo } from "react";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useWallets } from "@/hooks/useWallets";
 import { useMonthlySnapshots } from "@/hooks/useMonthlySnapshots";
-import { format, subMonths, getDaysInMonth, parse } from "date-fns";
+import { useBudgetGoal } from "@/hooks/useBudgetGoals";
+import { format, subMonths, getDaysInMonth, parse, differenceInDays, lastDayOfMonth } from "date-fns";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from "recharts";
 import { motion } from "framer-motion";
@@ -26,6 +27,7 @@ export default function Reports() {
   const { data: transactions } = useTransactions({ month, walletId: filterWallet === "all" ? undefined : filterWallet, category: filterCategory === "all" ? undefined : filterCategory });
   const { data: wallets } = useWallets();
   const { data: snapshots } = useMonthlySnapshots(month);
+  const { data: budgetGoal } = useBudgetGoal(month);
 
   // Previous month data for AI comparison
   const prevMonth = format(subMonths(parse(month, "yyyy-MM", new Date()), 1), "yyyy-MM");
@@ -39,6 +41,15 @@ export default function Reports() {
   const daysInMonth = getDaysInMonth(parse(month, "yyyy-MM", new Date()));
   const avgDaily = totalExpense / (daysInMonth || 1);
   const avgDailyIncome = totalIncome / (daysInMonth || 1);
+
+  // Days left and prev month daily avg for AI
+  const today = new Date();
+  const monthEnd = lastDayOfMonth(parse(month, "yyyy-MM", new Date()));
+  const daysLeftInMonth = Math.max(differenceInDays(monthEnd, today), 0);
+  const prevMonthDays = getDaysInMonth(parse(prevMonth, "yyyy-MM", new Date()));
+  const prevActiveTx = (prevTx || []).filter((t: any) => !t.is_reversed);
+  const prevTotalExpense = prevActiveTx.filter((t: any) => t.type === "expense").reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const prevDailyAvgSpend = prevTotalExpense / (prevMonthDays || 1);
 
   // Category data
   const expenseCategoryMap = useMemo(() => {
@@ -208,14 +219,13 @@ export default function Reports() {
       {/* AI Insights */}
       {allTxForMonth.length > 0 && (
         <AIInsights
-          summary={{
-            totalIncome,
-            totalExpense,
-            net,
-            categories: expenseCategoryMap,
-            month,
-          }}
-          previousMonth={prevMonthSummary}
+          currentTransactions={allTxForMonth.map((t: any) => ({ date: t.date, amount: Number(t.amount), category: t.category, type: t.type }))}
+          previousTransactions={(prevTx || []).filter((t: any) => !t.is_reversed).map((t: any) => ({ date: t.date, amount: Number(t.amount), category: t.category, type: t.type }))}
+          budget={budgetGoal ? Number(budgetGoal.monthly_budget) : null}
+          currentDate={format(new Date(), "MMMM d, yyyy")}
+          daysLeft={daysLeftInMonth}
+          dailyAvgSpend={avgDaily}
+          prevDailyAvgSpend={prevDailyAvgSpend}
         />
       )}
 

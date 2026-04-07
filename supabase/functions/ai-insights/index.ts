@@ -9,17 +9,25 @@ serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
   try {
-    const { summary, previousMonth } = await req.json();
+    const { currentTransactions, previousTransactions, budget, currentDate, daysLeft, dailyAvgSpend, prevDailyAvgSpend } = await req.json();
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    const systemPrompt = `You are a personal finance advisor for TakaFlow, a money tracking app. Analyze the user's monthly spending data and provide exactly 3-4 actionable, personalized tips in English. Be specific about categories and amounts. Use a friendly but professional tone. Format each tip as a JSON object with "icon" (one of "💡", "⚠️", "✅", "📊"), "title" (short, max 6 words), and "description" (1-2 sentences of actionable advice).`;
+    const systemPrompt = "You are a personal finance advisor. Analyze the user's spending data and give realistic, specific, actionable insights. Be direct and data-driven like an economist. Use actual numbers from the data.";
 
-    const userPrompt = `Here is my spending summary for this month:
-${JSON.stringify(summary, null, 2)}
-${previousMonth ? `\nPrevious month comparison:\n${JSON.stringify(previousMonth, null, 2)}` : "\nNo previous month data available."}
+    const userPrompt = `Here is my financial data:
 
-Analyze my spending patterns and give me personalized tips.`;
+Current month transactions: ${JSON.stringify(currentTransactions)}
+
+Previous month transactions: ${JSON.stringify(previousTransactions)}
+
+Monthly budget: ${budget || 'not set'}
+
+Today is ${currentDate}, ${daysLeft} days left in this month.
+Daily average spend so far: ৳${dailyAvgSpend}
+Previous month daily average: ৳${prevDailyAvgSpend}
+
+Please provide exactly 4 insights analyzing my finances.`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -38,7 +46,7 @@ Analyze my spending patterns and give me personalized tips.`;
             type: "function",
             function: {
               name: "provide_insights",
-              description: "Return 3-4 spending insight tips",
+              description: "Return exactly 4 financial insights",
               parameters: {
                 type: "object",
                 properties: {
@@ -47,13 +55,15 @@ Analyze my spending patterns and give me personalized tips.`;
                     items: {
                       type: "object",
                       properties: {
-                        icon: { type: "string", enum: ["💡", "⚠️", "✅", "📊"] },
+                        type: { type: "string", enum: ["comparison", "budget", "forecast", "advice"] },
                         title: { type: "string" },
-                        description: { type: "string" },
+                        message: { type: "string" },
                       },
-                      required: ["icon", "title", "description"],
+                      required: ["type", "title", "message"],
                       additionalProperties: false,
                     },
+                    minItems: 4,
+                    maxItems: 4,
                   },
                 },
                 required: ["insights"],
