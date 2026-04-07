@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useSavingsGoals, useCreateSavingsGoal, useAddToGoal, useDeleteSavingsGoal } from "@/hooks/useSavingsGoals";
+import MonthlyBudgetCard from "@/components/MonthlyBudgetCard";
 import { useWallets } from "@/hooks/useWallets";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useAuth } from "@/contexts/AuthContext";
