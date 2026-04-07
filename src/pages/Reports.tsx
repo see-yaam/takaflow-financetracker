@@ -27,6 +27,7 @@ export default function Reports() {
   const { data: transactions } = useTransactions({ month, walletId: filterWallet === "all" ? undefined : filterWallet, category: filterCategory === "all" ? undefined : filterCategory });
   const { data: wallets } = useWallets();
   const { data: snapshots } = useMonthlySnapshots(month);
+  const { data: budgetGoal } = useBudgetGoal(month);
 
   // Previous month data for AI comparison
   const prevMonth = format(subMonths(parse(month, "yyyy-MM", new Date()), 1), "yyyy-MM");
