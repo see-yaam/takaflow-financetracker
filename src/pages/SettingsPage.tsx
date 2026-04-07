@@ -107,15 +107,6 @@ export default function SettingsPage() {
     } catch (e: any) { toast.error(e.message); }
   };
 
-  const handleSetBudget = async () => {
-    const val = parseFloat(budgetInput);
-    if (!val || val <= 0) return;
-    try {
-      await upsertBudget.mutateAsync({ month: currentMonth, monthly_budget: val });
-      setBudgetInput("");
-      toast.success("Budget goal set");
-    } catch (e: any) { toast.error(e.message); }
-  };
 
   const handleTransfer = async () => {
     const amt = parseFloat(transferAmount);
