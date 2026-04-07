@@ -27,7 +27,7 @@ export default function SettingsPage() {
   const currentMonth = format(new Date(), "yyyy-MM");
   const { data: recurrings } = useRecurringTransactions();
   const deleteRecurring = useDeleteRecurring();
-  const { badges } = useStreaks();
+  
 
   const [newWalletName, setNewWalletName] = useState("");
   const [newWalletBalance, setNewWalletBalance] = useState("");
