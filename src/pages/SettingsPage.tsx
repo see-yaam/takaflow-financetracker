@@ -14,7 +14,7 @@ import { CURRENCIES } from "@/hooks/useCurrencyRates";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { format } from "date-fns";
-import { Plus, Pencil, Trash2, ArrowRightLeft, Repeat, Award } from "lucide-react";
+import { Plus, Pencil, Trash2, ArrowRightLeft, Repeat } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function SettingsPage() {
