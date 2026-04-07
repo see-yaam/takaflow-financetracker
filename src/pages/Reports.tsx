@@ -209,14 +209,13 @@ export default function Reports() {
       {/* AI Insights */}
       {allTxForMonth.length > 0 && (
         <AIInsights
-          summary={{
-            totalIncome,
-            totalExpense,
-            net,
-            categories: expenseCategoryMap,
-            month,
-          }}
-          previousMonth={prevMonthSummary}
+          currentTransactions={allTxForMonth.map((t: any) => ({ date: t.date, amount: Number(t.amount), category: t.category, type: t.type }))}
+          previousTransactions={(prevTx || []).filter((t: any) => !t.is_reversed).map((t: any) => ({ date: t.date, amount: Number(t.amount), category: t.category, type: t.type }))}
+          budget={budgetGoal ? Number(budgetGoal.monthly_budget) : null}
+          currentDate={format(new Date(), "MMMM d, yyyy")}
+          daysLeft={daysLeftInMonth}
+          dailyAvgSpend={avgDaily}
+          prevDailyAvgSpend={prevDailyAvgSpend}
         />
       )}
 
