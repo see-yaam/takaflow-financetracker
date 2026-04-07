@@ -32,7 +32,7 @@ export default function SettingsPage() {
   const [newWalletName, setNewWalletName] = useState("");
   const [newWalletBalance, setNewWalletBalance] = useState("");
   const [newWalletCurrency, setNewWalletCurrency] = useState("BDT");
-  const [budgetInput, setBudgetInput] = useState("");
+  
   const [editingWallet, setEditingWallet] = useState<{ id: string; name: string } | null>(null);
   const [editName, setEditName] = useState("");
 
