@@ -40,6 +40,7 @@ export default function DebtsPage() {
   const [addMoreAmount, setAddMoreAmount] = useState("");
   const [addMoreDate, setAddMoreDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [addMoreNote, setAddMoreNote] = useState("");
+  const [addMoreWalletId, setAddMoreWalletId] = useState("");
 
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
@@ -113,8 +114,8 @@ export default function DebtsPage() {
   };
 
   const handleAddMore = async () => {
-    if (!addMoreDialog || !addMoreAmount) {
-      toast.error("Enter amount");
+    if (!addMoreDialog || !addMoreAmount || !addMoreWalletId) {
+      toast.error("Fill in all required fields");
       return;
     }
     const amt = parseFloat(addMoreAmount);
@@ -123,7 +124,7 @@ export default function DebtsPage() {
       return;
     }
     if (addMoreDialog.type === "lent") {
-      const w = wallets?.find((w) => w.id === addMoreDialog.wallet_id);
+      const w = wallets?.find((w) => w.id === addMoreWalletId);
       if (w && Number(w.balance) < amt) {
         toast.error("Insufficient wallet balance");
         return;
@@ -135,7 +136,7 @@ export default function DebtsPage() {
         amount: amt,
         date: addMoreDate,
         note: addMoreNote || undefined,
-        walletId: addMoreDialog.wallet_id,
+        walletId: addMoreWalletId,
         debtType: addMoreDialog.type,
         personName: addMoreDialog.person_name,
       });
@@ -143,6 +144,7 @@ export default function DebtsPage() {
       setAddMoreDialog(null);
       setAddMoreAmount("");
       setAddMoreNote("");
+      setAddMoreWalletId("");
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -175,7 +177,6 @@ export default function DebtsPage() {
     const additions = getAdditionsForDebt(d.id);
     const totalAdditions = additions.reduce((s: number, a: any) => s + Number(a.amount), 0);
     const isExpanded = expanded[d.id];
-    // Original amount = current total - all additions
     const originalAmount = Number(d.amount) - totalAdditions;
 
     return (
@@ -259,6 +260,7 @@ export default function DebtsPage() {
                 onClick={() => {
                   setAddMoreDialog(d);
                   setAddMoreDate(new Date().toLocaleDateString("en-CA"));
+                  setAddMoreWalletId(d.wallet_id || "");
                 }}
                 size="sm"
                 className="bg-primary/15 text-primary hover:bg-primary/25 border-0"
@@ -285,15 +287,20 @@ export default function DebtsPage() {
             {additions.length > 0 && (
               <>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Additions</p>
-                {additions.map((a: any) => (
-                  <div key={a.id} className="flex items-center justify-between text-sm">
-                    <div>
-                      <span className="text-muted-foreground">{format(new Date(a.date), "MMM d, yyyy")}</span>
-                      {a.note && <span className="text-muted-foreground ml-2">· {a.note}</span>}
+                {additions.map((a: any) => {
+                  const additionWalletName = wallets?.find((w) => w.id === a.wallet_id)?.name;
+
+                  return (
+                    <div key={a.id} className="flex items-center justify-between text-sm">
+                      <div>
+                        <span className="text-muted-foreground">{format(new Date(a.date), "MMM d, yyyy")}</span>
+                        {additionWalletName && <span className="text-muted-foreground ml-2">· {additionWalletName}</span>}
+                        {a.note && <span className="text-muted-foreground ml-2">· {a.note}</span>}
+                      </div>
+                      <span className="tabular-nums text-accent font-medium">+৳{Number(a.amount).toLocaleString()}</span>
                     </div>
-                    <span className="tabular-nums text-accent font-medium">+৳{Number(a.amount).toLocaleString()}</span>
-                  </div>
-                ))}
+                  );
+                })}
               </>
             )}
             {payments.length > 0 && (
@@ -333,7 +340,6 @@ export default function DebtsPage() {
         </Button>
       </div>
 
-      {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="vault-card p-4">
           <p className="wallet-label mb-1">Total Borrowed</p>
@@ -353,7 +359,6 @@ export default function DebtsPage() {
         </div>
       </div>
 
-      {/* Net position */}
       <div className="vault-card p-4">
         <div className="flex items-center justify-between">
           <p className="wallet-label">Net Debt Position</p>
@@ -366,7 +371,6 @@ export default function DebtsPage() {
         </p>
       </div>
 
-      {/* Tabs */}
       <Tabs defaultValue="borrowed">
         <TabsList className="bg-secondary">
           <TabsTrigger value="borrowed">Borrowed ({borrowed.length})</TabsTrigger>
@@ -402,7 +406,6 @@ export default function DebtsPage() {
         </TabsContent>
       </Tabs>
 
-      {/* Create Debt Dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="bg-card border-border">
           <DialogHeader>
@@ -461,7 +464,6 @@ export default function DebtsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add Payment Dialog */}
       <Dialog open={!!payDialog} onOpenChange={(open) => !open && setPayDialog(null)}>
         <DialogContent className="bg-card border-border">
           <DialogHeader>
@@ -500,8 +502,15 @@ export default function DebtsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Add More Dialog */}
-      <Dialog open={!!addMoreDialog} onOpenChange={(open) => !open && setAddMoreDialog(null)}>
+      <Dialog
+        open={!!addMoreDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setAddMoreDialog(null);
+            setAddMoreWalletId("");
+          }
+        }}
+      >
         <DialogContent className="bg-card border-border">
           <DialogHeader>
             <DialogTitle className="text-foreground">
@@ -522,6 +531,21 @@ export default function DebtsPage() {
                 placeholder="1000"
                 className="bg-secondary border-border"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Wallet</Label>
+              <Select value={addMoreWalletId} onValueChange={setAddMoreWalletId}>
+                <SelectTrigger className="bg-secondary border-border">
+                  <SelectValue placeholder="Select wallet" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  {wallets?.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name} (৳{Number(w.balance).toLocaleString()})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Date</Label>
