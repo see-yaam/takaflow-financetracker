@@ -135,6 +135,9 @@ export default function DebtsPage() {
         amount: amt,
         date: addMoreDate,
         note: addMoreNote || undefined,
+        walletId: addMoreDialog.wallet_id,
+        debtType: addMoreDialog.type,
+        personName: addMoreDialog.person_name,
       });
       toast.success("Amount added to debt!");
       setAddMoreDialog(null);

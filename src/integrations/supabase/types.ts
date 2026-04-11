@@ -47,6 +47,7 @@ export type Database = {
           id: string
           note: string | null
           user_id: string
+          wallet_id: string | null
         }
         Insert: {
           amount: number
@@ -56,6 +57,7 @@ export type Database = {
           id?: string
           note?: string | null
           user_id: string
+          wallet_id?: string | null
         }
         Update: {
           amount?: number
@@ -65,6 +67,7 @@ export type Database = {
           id?: string
           note?: string | null
           user_id?: string
+          wallet_id?: string | null
         }
         Relationships: [
           {
@@ -72,6 +75,13 @@ export type Database = {
             columns: ["debt_id"]
             isOneToOne: false
             referencedRelation: "debts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "debt_additions_wallet_id_fkey"
+            columns: ["wallet_id"]
+            isOneToOne: false
+            referencedRelation: "wallets"
             referencedColumns: ["id"]
           },
         ]

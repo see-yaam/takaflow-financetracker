@@ -193,12 +193,19 @@ export function useAddDebtAddition() {
       amount,
       date,
       note,
+      walletId,
+      debtType,
+      personName,
     }: {
       debtId: string;
       amount: number;
       date: string;
       note?: string;
+      walletId: string;
+      debtType: "borrowed" | "lent";
+      personName: string;
     }) => {
+      // Insert addition record with wallet_id
       const { error } = await supabase
         .from("debt_additions" as any)
         .insert({
@@ -207,13 +214,32 @@ export function useAddDebtAddition() {
           amount,
           date,
           note: note || null,
+          wallet_id: walletId,
         });
       if (error) throw error;
+
+      // Create a transaction record
+      const txType = debtType === "borrowed" ? "income" : "expense";
+      const category = debtType === "borrowed"
+        ? `Borrowed - ${personName}`
+        : `Lent - ${personName}`;
+      const txNote = note || `${debtType === "borrowed" ? "Additional borrowed from" : "Additional lent to"} ${personName}`;
+      const { error: txErr } = await supabase.from("transactions").insert({
+        user_id: user!.id,
+        wallet_id: walletId,
+        type: txType,
+        amount,
+        category,
+        note: txNote,
+        date,
+      });
+      if (txErr) throw txErr;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["debts"] });
       qc.invalidateQueries({ queryKey: ["debt_additions_all"] });
       qc.invalidateQueries({ queryKey: ["wallets"] });
+      qc.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 }

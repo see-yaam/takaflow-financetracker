@@ -39,7 +39,7 @@ export function useUpdateWallet() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, name, balance }: { id: string; name?: string; balance?: number }) => {
-      const updates: Record<string, unknown> = {};
+      const updates: { name?: string; balance?: number } = {};
       if (name !== undefined) updates.name = name;
       if (balance !== undefined) updates.balance = balance;
       const { error } = await supabase.from("wallets").update(updates).eq("id", id);
