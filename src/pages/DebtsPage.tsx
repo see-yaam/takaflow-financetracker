@@ -35,6 +35,7 @@ export default function DebtsPage() {
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [payNote, setPayNote] = useState("");
+  const [payWalletId, setPayWalletId] = useState("");
 
   const [addMoreDialog, setAddMoreDialog] = useState<any>(null);
   const [addMoreAmount, setAddMoreAmount] = useState("");
@@ -81,13 +82,17 @@ export default function DebtsPage() {
       toast.error("Enter payment amount");
       return;
     }
+    if (!payWalletId) {
+      toast.error("Please select a wallet");
+      return;
+    }
     const amt = parseFloat(payAmount);
     if (amt > payDialog.remaining_amount) {
       toast.error("Amount exceeds remaining balance");
       return;
     }
     if (payDialog.type === "borrowed") {
-      const w = wallets?.find((w) => w.id === payDialog.wallet_id);
+      const w = wallets?.find((w) => w.id === payWalletId);
       if (w && Number(w.balance) < amt) {
         toast.error("Insufficient wallet balance");
         return;
@@ -100,7 +105,7 @@ export default function DebtsPage() {
         date: payDate,
         note: payNote || undefined,
         debtType: payDialog.type,
-        walletId: payDialog.wallet_id,
+        walletId: payWalletId,
         personName: payDialog.person_name,
         currentRemaining: payDialog.remaining_amount,
       });
@@ -108,6 +113,7 @@ export default function DebtsPage() {
       setPayDialog(null);
       setPayAmount("");
       setPayNote("");
+      setPayWalletId("");
     } catch (e: any) {
       toast.error(e.message);
     }
@@ -464,7 +470,15 @@ export default function DebtsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!payDialog} onOpenChange={(open) => !open && setPayDialog(null)}>
+      <Dialog
+        open={!!payDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPayDialog(null);
+            setPayWalletId("");
+          }
+        }}
+      >
         <DialogContent className="bg-card border-border">
           <DialogHeader>
             <DialogTitle className="text-foreground">
@@ -486,6 +500,21 @@ export default function DebtsPage() {
                 max={payDialog?.remaining_amount}
                 className="bg-secondary border-border"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Wallet</Label>
+              <Select value={payWalletId} onValueChange={setPayWalletId}>
+                <SelectTrigger className="bg-secondary border-border">
+                  <SelectValue placeholder="Select wallet" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  {wallets?.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name} (৳{Number(w.balance).toLocaleString()})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Date</Label>
