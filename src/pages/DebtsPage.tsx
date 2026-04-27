@@ -470,7 +470,15 @@ export default function DebtsPage() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!payDialog} onOpenChange={(open) => !open && setPayDialog(null)}>
+      <Dialog
+        open={!!payDialog}
+        onOpenChange={(open) => {
+          if (!open) {
+            setPayDialog(null);
+            setPayWalletId("");
+          }
+        }}
+      >
         <DialogContent className="bg-card border-border">
           <DialogHeader>
             <DialogTitle className="text-foreground">
@@ -492,6 +500,21 @@ export default function DebtsPage() {
                 max={payDialog?.remaining_amount}
                 className="bg-secondary border-border"
               />
+            </div>
+            <div className="space-y-2">
+              <Label>Wallet</Label>
+              <Select value={payWalletId} onValueChange={setPayWalletId}>
+                <SelectTrigger className="bg-secondary border-border">
+                  <SelectValue placeholder="Select wallet" />
+                </SelectTrigger>
+                <SelectContent className="bg-popover border-border">
+                  {wallets?.map((w) => (
+                    <SelectItem key={w.id} value={w.id}>
+                      {w.name} (৳{Number(w.balance).toLocaleString()})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label>Date</Label>
