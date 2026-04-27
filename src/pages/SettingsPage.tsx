@@ -120,10 +120,20 @@ export default function SettingsPage() {
       return;
     }
     try {
-      await supabase.from("transactions").insert([
-        { user_id: user!.id, wallet_id: transferFrom, type: "expense", amount: amt, category: "Transfer", note: `Transfer to ${wallets?.find(w => w.id === transferTo)?.name}`, date: format(new Date(), "yyyy-MM-dd") },
-        { user_id: user!.id, wallet_id: transferTo, type: "income", amount: amt, category: "Transfer", note: `Transfer from ${wallets?.find(w => w.id === transferFrom)?.name}`, date: format(new Date(), "yyyy-MM-dd") },
-      ]);
+      // Internal transfer: only update wallet balances, do NOT create any transaction records
+      const toWallet = wallets?.find((w) => w.id === transferTo);
+      const newFromBal = Number(fromWallet?.balance || 0) - amt;
+      const newToBal = Number(toWallet?.balance || 0) + amt;
+      const { error: e1 } = await supabase
+        .from("wallets")
+        .update({ balance: newFromBal })
+        .eq("id", transferFrom);
+      if (e1) throw e1;
+      const { error: e2 } = await supabase
+        .from("wallets")
+        .update({ balance: newToBal })
+        .eq("id", transferTo);
+      if (e2) throw e2;
       toast.success("Transfer completed");
       setTransferAmount("");
       window.location.reload();
