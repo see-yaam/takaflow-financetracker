@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import CurrencyDoodles from "@/components/CurrencyDoodles";
+import { mapSupabaseError } from "@/lib/supabaseErrors";
+import { signupSchema } from "@/lib/validations";
 
 export default function Signup() {
   const [email, setEmail] = useState("");
@@ -21,19 +23,23 @@ export default function Signup() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { emailRedirectTo: window.location.origin },
-    });
-    if (error) {
-      toast.error(error.message);
-    } else {
+    try {
+      const parsed = signupSchema.parse({ email, password });
+      const { error } = await supabase.auth.signUp({
+        email: parsed.email,
+        password: parsed.password,
+        options: { emailRedirectTo: window.location.origin },
+      });
+      if (error) throw error;
       toast.success("Account created! Now Login with your gmail & password.");
       navigate("/login");
+    } catch (err) {
+      toast.error(mapSupabaseError(err));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

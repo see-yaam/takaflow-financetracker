@@ -6,6 +6,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import CurrencyDoodles from "@/components/CurrencyDoodles";
+import { mapSupabaseError } from "@/lib/supabaseErrors";
+import { loginSchema } from "@/lib/validations";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -15,14 +17,18 @@ export default function Login() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      toast.error(error.message);
-    } else {
+    try {
+      const parsed = loginSchema.parse({ email, password });
+      const { error } = await supabase.auth.signInWithPassword(parsed);
+      if (error) throw error;
       navigate("/");
+    } catch (err) {
+      toast.error(mapSupabaseError(err));
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   return (

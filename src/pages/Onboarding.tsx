@@ -8,6 +8,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Trash2, Smartphone, Landmark, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { mapSupabaseError } from "@/lib/supabaseErrors";
+import { onboardingWalletSchema } from "@/lib/validations";
 import { motion } from "framer-motion";
 
 const presets = [
@@ -60,17 +62,18 @@ export default function Onboarding() {
     setSaving(true);
     try {
       for (const w of valid) {
-        await createWallet.mutateAsync({
+        const parsed = onboardingWalletSchema.parse({
           name: w.name.trim(),
           balance: parseFloat(w.balance) || 0,
           icon: w.icon,
           currency: w.currency,
         });
+        await createWallet.mutateAsync(parsed);
       }
       toast.success("Wallets initialized!");
       navigate("/");
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(mapSupabaseError(e));
     }
     setSaving(false);
   };

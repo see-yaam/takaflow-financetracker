@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { mapSupabaseError } from "@/lib/supabaseErrors";
+import { forgotPasswordSchema } from "@/lib/validations";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
@@ -17,18 +19,17 @@ export default function ForgotPassword() {
     setLoading(true);
 
     try {
+      const parsed = forgotPasswordSchema.parse({ email });
       const { data, error } = await supabase.functions.invoke("send-reset-email", {
-        body: { email },
+        body: parsed,
       });
 
-      if (error) {
-        toast.error("Failed to send reset link. Please try again.");
-      } else {
-        setSent(true);
-        toast.success("If an account exists, a reset link has been sent!");
-      }
-    } catch {
-      toast.error("Something went wrong. Please try again.");
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      setSent(true);
+      toast.success("If an account exists, a reset link has been sent!");
+    } catch (err) {
+      toast.error(mapSupabaseError(err));
     }
 
     setLoading(false);

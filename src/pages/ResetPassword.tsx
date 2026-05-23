@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { mapSupabaseError } from "@/lib/supabaseErrors";
+import { resetPasswordSchema } from "@/lib/validations";
 
 export default function ResetPassword() {
   const [password, setPassword] = useState("");
@@ -17,34 +19,22 @@ export default function ResetPassword() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (loading) return;
-    if (password !== confirmPassword) {
-      toast.error("Passwords do not match");
-      return;
-    }
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
 
     setLoading(true);
 
     try {
+      const parsed = resetPasswordSchema.parse({ password, confirmPassword });
       const { data, error } = await supabase.functions.invoke("verify-reset-token", {
-        body: { token, password },
+        body: { token, password: parsed.password },
       });
 
-      if (error) {
-        toast.error("Failed to reset password. Please try again.");
-      } else if (data?.error) {
-        toast.error(data.error);
-      } else {
-        toast.success("Password updated successfully!");
-        // Sign out any existing session to force fresh login
-        await supabase.auth.signOut();
-        navigate("/login");
-      }
-    } catch {
-      toast.error("Something went wrong. Please try again.");
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success("Password updated successfully!");
+      await supabase.auth.signOut();
+      navigate("/login");
+    } catch (err) {
+      toast.error(mapSupabaseError(err));
     }
 
     setLoading(false);

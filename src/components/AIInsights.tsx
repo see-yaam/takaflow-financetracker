@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { Skeleton } from "@/components/ui/skeleton";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -78,8 +79,8 @@ export default function AIInsights({
       if (data?.error) throw new Error(data.error);
       setInsights(data?.insights || []);
       setFetched(true);
-    } catch (e: any) {
-      setError(e.message || "Failed to get insights");
+    } catch (e) {
+      setError(mapSupabaseError(e));
     }
     setLoading(false);
   };
@@ -95,7 +96,7 @@ export default function AIInsights({
         <p className="text-sm text-muted-foreground mb-4">
           Get data-driven spending analysis with specific numbers and actionable recommendations.
         </p>
-        <Button onClick={fetchInsights} className="bg-primary/15 text-primary hover:bg-primary/25 border-0">
+        <Button onClick={fetchInsights} disabled={loading} className="bg-primary/15 text-primary hover:bg-primary/25 border-0">
           <Sparkles className="h-4 w-4 mr-2" /> Analyze My Spending
         </Button>
       </div>
@@ -109,7 +110,7 @@ export default function AIInsights({
           <Sparkles className="h-3 w-3" /> AI Financial Analysis
         </h3>
         {fetched && (
-          <Button onClick={fetchInsights} size="sm" variant="ghost" className="text-xs text-muted-foreground">
+          <Button onClick={fetchInsights} disabled={loading} size="sm" variant="ghost" className="text-xs text-muted-foreground">
             Refresh
           </Button>
         )}
@@ -133,7 +134,7 @@ export default function AIInsights({
       {error && (
         <div className="text-sm text-destructive">
           {error}
-          <Button onClick={fetchInsights} variant="outline" size="sm" className="ml-3 border-border">
+          <Button onClick={fetchInsights} disabled={loading} variant="outline" size="sm" className="ml-3 border-border">
             Retry
           </Button>
         </div>

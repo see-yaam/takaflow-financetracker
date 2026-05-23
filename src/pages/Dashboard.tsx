@@ -18,6 +18,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { mapSupabaseError } from "@/lib/supabaseErrors";
 
 const iconMap: Record<string, React.ElementType> = {
   smartphone: Smartphone,
@@ -77,7 +78,7 @@ export default function Dashboard() {
         toast.success("Transaction reversed");
         setReverseTarget(null);
       },
-      onError: () => toast.error("Failed to reverse transaction"),
+      onError: (e) => toast.error(mapSupabaseError(e)),
     });
   };
 
@@ -246,8 +247,12 @@ export default function Dashboard() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleReverse} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
-              Reverse
+            <AlertDialogAction
+              onClick={handleReverse}
+              disabled={reverseMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {reverseMutation.isPending ? "Reversing..." : "Reverse"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

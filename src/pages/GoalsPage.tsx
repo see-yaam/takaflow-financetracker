@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Trash2, Target } from "lucide-react";
 import { format } from "date-fns";
@@ -54,7 +55,7 @@ export default function GoalsPage() {
       toast.success("Goal created!");
       setShowCreate(false);
       setTitle(""); setTarget(""); setDeadline(""); setEmoji("🫙");
-    } catch (e: any) { toast.error(e.message); }
+    } catch (e) { toast.error(mapSupabaseError(e)); }
   };
 
   const handleAdd = async (goalId: string) => {
@@ -72,7 +73,16 @@ export default function GoalsPage() {
       }
       toast.success("Funds added to goal!");
       setAddDialog(null); setAddAmount(""); setAddWallet("");
-    } catch (e: any) { toast.error(e.message); }
+    } catch (e) { toast.error(mapSupabaseError(e)); }
+  };
+
+  const handleDeleteGoal = async (id: string) => {
+    try {
+      await deleteGoal.mutateAsync(id);
+      toast.success("Goal deleted");
+    } catch (e) {
+      toast.error(mapSupabaseError(e));
+    }
   };
 
   if (isLoading) {
@@ -128,7 +138,12 @@ export default function GoalsPage() {
                       {g.deadline && <p className="text-xs text-muted-foreground">Due: {format(new Date(g.deadline), "MMM d, yyyy")}</p>}
                     </div>
                   </div>
-                  <button onClick={() => deleteGoal.mutate(g.id)} className="text-muted-foreground hover:text-destructive">
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteGoal(g.id)}
+                    disabled={deleteGoal.isPending}
+                    className="text-muted-foreground hover:text-destructive disabled:opacity-50"
+                  >
                     <Trash2 className="h-4 w-4" />
                   </button>
                 </div>

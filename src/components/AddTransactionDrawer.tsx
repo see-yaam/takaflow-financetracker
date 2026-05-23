@@ -9,6 +9,7 @@ import { useWallets } from "@/hooks/useWallets";
 import { useCreateTransaction, useTransactions } from "@/hooks/useTransactions";
 import { useCreateRecurring } from "@/hooks/useRecurringTransactions";
 import { toast } from "sonner";
+import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { format } from "date-fns";
 import { Plus } from "lucide-react";
 
@@ -101,10 +102,12 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
       }
 
       onOpenChange(false);
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(mapSupabaseError(e));
     }
   };
+
+  const isSubmitting = createTx.isPending || createRecurring.isPending;
 
   return (
     <Drawer open={open} onOpenChange={onOpenChange} dismissible={false}>
@@ -243,10 +246,10 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
           <div className="flex flex-col sm:flex-row gap-2 pt-2">
             <Button
               onClick={handleSubmit}
-              disabled={createTx.isPending}
+              disabled={isSubmitting}
               className="w-full min-h-[52px] bg-primary hover:bg-primary/90 text-primary-foreground"
             >
-              {createTx.isPending ? "Committing..." : "Commit Transaction"}
+              {isSubmitting ? "Committing..." : "Commit Transaction"}
             </Button>
             <Button
               type="button"

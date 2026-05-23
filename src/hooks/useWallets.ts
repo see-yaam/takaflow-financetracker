@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { throwIfSupabaseError } from "@/lib/supabaseErrors";
+import { walletCreateSchema, walletUpdateSchema } from "@/lib/validations";
 
 export function useWallets() {
   const { user } = useAuth();
@@ -11,7 +13,7 @@ export function useWallets() {
         .from("wallets")
         .select("*")
         .order("created_at", { ascending: true });
-      if (error) throw error;
+      throwIfSupabaseError(error);
       return data;
     },
     enabled: !!user,
@@ -23,12 +25,19 @@ export function useCreateWallet() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ name, balance, icon, currency }: { name: string; balance: number; icon?: string; currency?: string }) => {
+      const parsed = walletCreateSchema.parse({ name, balance, icon, currency: currency || "BDT" });
       const { data, error } = await supabase
         .from("wallets")
-        .insert({ name, balance, icon: icon || "wallet", user_id: user!.id, currency: currency || "BDT" } as any)
+        .insert({
+          name: parsed.name,
+          balance: parsed.balance,
+          icon: parsed.icon || "wallet",
+          user_id: user!.id,
+          currency: parsed.currency,
+        } as any)
         .select()
         .single();
-      if (error) throw error;
+      throwIfSupabaseError(error);
       return data;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wallets"] }),
@@ -39,11 +48,12 @@ export function useUpdateWallet() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id, name, balance }: { id: string; name?: string; balance?: number }) => {
+      const parsed = walletUpdateSchema.parse({ id, name, balance });
       const updates: { name?: string; balance?: number } = {};
-      if (name !== undefined) updates.name = name;
-      if (balance !== undefined) updates.balance = balance;
-      const { error } = await supabase.from("wallets").update(updates).eq("id", id);
-      if (error) throw error;
+      if (parsed.name !== undefined) updates.name = parsed.name;
+      if (parsed.balance !== undefined) updates.balance = parsed.balance;
+      const { error } = await supabase.from("wallets").update(updates).eq("id", parsed.id);
+      throwIfSupabaseError(error);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wallets"] }),
   });
@@ -54,7 +64,7 @@ export function useDeleteWallet() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("wallets").delete().eq("id", id);
-      if (error) throw error;
+      throwIfSupabaseError(error);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["wallets"] });

@@ -1,13 +1,19 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { throwIfSupabaseError } from "@/lib/supabaseErrors";
+import { transactionCreateSchema } from "@/lib/validations";
 
 export function useTransactions(filters?: { month?: string; walletId?: string; category?: string }) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ["transactions", user?.id, filters],
     queryFn: async () => {
-      let query = supabase.from("transactions").select("*, wallets(name)").order("date", { ascending: false }).order("created_at", { ascending: false });
+      let query = supabase
+        .from("transactions")
+        .select("*, wallets(name)")
+        .order("date", { ascending: false })
+        .order("created_at", { ascending: false });
       if (filters?.month) {
         const [y, m] = filters.month.split("-");
         const start = `${y}-${m}-01`;
@@ -18,7 +24,7 @@ export function useTransactions(filters?: { month?: string; walletId?: string; c
       if (filters?.walletId) query = query.eq("wallet_id", filters.walletId);
       if (filters?.category) query = query.eq("category", filters.category);
       const { data, error } = await query;
-      if (error) throw error;
+      throwIfSupabaseError(error);
       return data;
     },
     enabled: !!user,
@@ -30,12 +36,16 @@ export function useCreateTransaction() {
   const { user } = useAuth();
   return useMutation({
     mutationFn: async (tx: { wallet_id: string; type: string; amount: number; category: string; note?: string; date?: string }) => {
+      const parsed = transactionCreateSchema.parse({
+        ...tx,
+        date: tx.date || new Date().toISOString().slice(0, 10),
+      });
       const { data, error } = await supabase
         .from("transactions")
-        .insert({ ...tx, user_id: user!.id })
+        .insert({ ...parsed, user_id: user!.id })
         .select()
         .single();
-      if (error) throw error;
+      throwIfSupabaseError(error);
       return data;
     },
     onSuccess: () => {
@@ -50,7 +60,7 @@ export function useDeleteTransaction() {
   return useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("transactions").delete().eq("id", id);
-      if (error) throw error;
+      throwIfSupabaseError(error);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });
@@ -67,7 +77,7 @@ export function useReverseTransaction() {
         .from("transactions")
         .update({ is_reversed: true } as any)
         .eq("id", id);
-      if (error) throw error;
+      throwIfSupabaseError(error);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });

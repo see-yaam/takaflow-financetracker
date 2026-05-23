@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { motion } from "framer-motion";
 import { format } from "date-fns";
 import { Wallet, Pencil } from "lucide-react";
@@ -34,7 +35,7 @@ export default function MonthlyBudgetCard() {
       setBudgetInput("");
       setShowDialog(false);
       toast.success("Budget goal set");
-    } catch (e: any) { toast.error(e.message); }
+    } catch (e) { toast.error(mapSupabaseError(e)); }
   };
 
   return (

@@ -1,6 +1,8 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { throwIfSupabaseError } from "@/lib/supabaseErrors";
+import { debtAdditionSchema, debtCreateSchema, debtPaymentSchema } from "@/lib/validations";
 
 export function useDebts() {
   const { user } = useAuth();
@@ -11,7 +13,7 @@ export function useDebts() {
         .from("debts" as any)
         .select("*, wallets(name)")
         .order("created_at", { ascending: false });
-      if (error) throw error;
+      throwIfSupabaseError(error);
       return data as any[];
     },
     enabled: !!user,
@@ -28,7 +30,7 @@ export function useDebtPayments(debtId: string | null) {
         .select("*")
         .eq("debt_id", debtId!)
         .order("date", { ascending: false });
-      if (error) throw error;
+      throwIfSupabaseError(error);
       return data as any[];
     },
     enabled: !!user && !!debtId,
@@ -44,7 +46,7 @@ export function useAllDebtPayments() {
         .from("debt_payments" as any)
         .select("*")
         .order("date", { ascending: false });
-      if (error) throw error;
+      throwIfSupabaseError(error);
       return data as any[];
     },
     enabled: !!user,
@@ -63,31 +65,29 @@ export function useCreateDebt() {
       date: string;
       note?: string;
     }) => {
-      // Create debt record
+      const parsed = debtCreateSchema.parse(debt);
       const { data, error } = await supabase
         .from("debts" as any)
         .insert({
-          ...debt,
-          remaining_amount: debt.amount,
+          ...parsed,
+          remaining_amount: parsed.amount,
           user_id: user!.id,
         })
         .select()
         .single();
-      if (error) throw error;
+      throwIfSupabaseError(error);
 
-      // Update wallet balance: borrowed → increase, lent → decrease
-      // We do this via a transaction record so the trigger handles it
-      const txType = debt.type === "borrowed" ? "income" : "expense";
+      const txType = parsed.type === "borrowed" ? "income" : "expense";
       const { error: txErr } = await supabase.from("transactions").insert({
         user_id: user!.id,
-        wallet_id: debt.wallet_id,
+        wallet_id: parsed.wallet_id,
         type: txType,
-        amount: debt.amount,
-        category: debt.type === "borrowed" ? "Debt Borrowed" : "Debt Lent",
-        note: `${debt.type === "borrowed" ? "Borrowed from" : "Lent to"} ${debt.person_name}`,
-        date: debt.date,
+        amount: parsed.amount,
+        category: parsed.type === "borrowed" ? "Debt Borrowed" : "Debt Lent",
+        note: `${parsed.type === "borrowed" ? "Borrowed from" : "Lent to"} ${parsed.person_name}`,
+        date: parsed.date,
       });
-      if (txErr) throw txErr;
+      throwIfSupabaseError(txErr);
 
       return data;
     },
@@ -122,41 +122,44 @@ export function useAddDebtPayment() {
       personName: string;
       currentRemaining: number;
     }) => {
-      // Insert payment record
-      const { error: payErr } = await supabase
-        .from("debt_payments" as any)
-        .insert({
-          debt_id: debtId,
-          user_id: user!.id,
-          amount,
-          date,
-          note: note || null,
-        });
-      if (payErr) throw payErr;
+      const parsed = debtPaymentSchema.parse({
+        debtId,
+        amount,
+        date,
+        note,
+        debtType,
+        walletId,
+        personName,
+        currentRemaining,
+      });
 
-      // Update remaining amount
-      const newRemaining = currentRemaining - amount;
+      const { error: payErr } = await supabase.from("debt_payments" as any).insert({
+        debt_id: parsed.debtId,
+        user_id: user!.id,
+        amount: parsed.amount,
+        date: parsed.date,
+        note: parsed.note || null,
+      });
+      throwIfSupabaseError(payErr);
+
+      const newRemaining = parsed.currentRemaining - parsed.amount;
       const updates: any = { remaining_amount: newRemaining };
       if (newRemaining <= 0) updates.settled = true;
 
-      const { error: upErr } = await supabase
-        .from("debts" as any)
-        .update(updates)
-        .eq("id", debtId);
-      if (upErr) throw upErr;
+      const { error: upErr } = await supabase.from("debts" as any).update(updates).eq("id", parsed.debtId);
+      throwIfSupabaseError(upErr);
 
-      // Update wallet: borrowed repayment → expense, lent recovery → income
-      const txType = debtType === "borrowed" ? "expense" : "income";
+      const txType = parsed.debtType === "borrowed" ? "expense" : "income";
       const { error: txErr } = await supabase.from("transactions").insert({
         user_id: user!.id,
-        wallet_id: walletId,
+        wallet_id: parsed.walletId,
         type: txType,
-        amount,
-        category: debtType === "borrowed" ? "Debt Repayment" : "Debt Recovery",
-        note: `${debtType === "borrowed" ? "Repaid to" : "Recovered from"} ${personName}`,
-        date,
+        amount: parsed.amount,
+        category: parsed.debtType === "borrowed" ? "Debt Repayment" : "Debt Recovery",
+        note: `${parsed.debtType === "borrowed" ? "Repaid to" : "Recovered from"} ${parsed.personName}`,
+        date: parsed.date,
       });
-      if (txErr) throw txErr;
+      throwIfSupabaseError(txErr);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["debts"] });
@@ -177,7 +180,7 @@ export function useAllDebtAdditions() {
         .from("debt_additions" as any)
         .select("*")
         .order("date", { ascending: false });
-      if (error) throw error;
+      throwIfSupabaseError(error);
       return data as any[];
     },
     enabled: !!user,
@@ -205,35 +208,42 @@ export function useAddDebtAddition() {
       debtType: "borrowed" | "lent";
       personName: string;
     }) => {
-      // Insert addition record with wallet_id
-      const { error } = await supabase
-        .from("debt_additions" as any)
-        .insert({
-          debt_id: debtId,
-          user_id: user!.id,
-          amount,
-          date,
-          note: note || null,
-          wallet_id: walletId,
-        });
-      if (error) throw error;
+      const parsed = debtAdditionSchema.parse({
+        debtId,
+        amount,
+        date,
+        note,
+        walletId,
+        debtType,
+        personName,
+      });
 
-      // Create a transaction record
-      const txType = debtType === "borrowed" ? "income" : "expense";
-      const category = debtType === "borrowed"
-        ? `Borrowed - ${personName}`
-        : `Lent - ${personName}`;
-      const txNote = note || `${debtType === "borrowed" ? "Additional borrowed from" : "Additional lent to"} ${personName}`;
+      const { error } = await supabase.from("debt_additions" as any).insert({
+        debt_id: parsed.debtId,
+        user_id: user!.id,
+        amount: parsed.amount,
+        date: parsed.date,
+        note: parsed.note || null,
+        wallet_id: parsed.walletId,
+      });
+      throwIfSupabaseError(error);
+
+      const txType = parsed.debtType === "borrowed" ? "income" : "expense";
+      const category =
+        parsed.debtType === "borrowed" ? `Borrowed - ${parsed.personName}` : `Lent - ${parsed.personName}`;
+      const txNote =
+        parsed.note ||
+        `${parsed.debtType === "borrowed" ? "Additional borrowed from" : "Additional lent to"} ${parsed.personName}`;
       const { error: txErr } = await supabase.from("transactions").insert({
         user_id: user!.id,
-        wallet_id: walletId,
+        wallet_id: parsed.walletId,
         type: txType,
-        amount,
+        amount: parsed.amount,
         category,
         note: txNote,
-        date,
+        date: parsed.date,
       });
-      if (txErr) throw txErr;
+      throwIfSupabaseError(txErr);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["debts"] });

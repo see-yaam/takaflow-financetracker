@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
+import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Handshake, ChevronDown, ChevronUp, PlusCircle } from "lucide-react";
 import { format } from "date-fns";
@@ -72,8 +73,8 @@ export default function DebtsPage() {
       setPersonName("");
       setAmount("");
       setDebtNote("");
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(mapSupabaseError(e));
     }
   };
 
@@ -114,8 +115,8 @@ export default function DebtsPage() {
       setPayAmount("");
       setPayNote("");
       setPayWalletId("");
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(mapSupabaseError(e));
     }
   };
 
@@ -151,8 +152,8 @@ export default function DebtsPage() {
       setAddMoreAmount("");
       setAddMoreNote("");
       setAddMoreWalletId("");
-    } catch (e: any) {
-      toast.error(e.message);
+    } catch (e) {
+      toast.error(mapSupabaseError(e));
     }
   };
 
