@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { motion, AnimatePresence } from "framer-motion";
@@ -31,6 +32,7 @@ export default function DebtsPage() {
   const [walletId, setWalletId] = useState("");
   const [debtDate, setDebtDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [debtNote, setDebtNote] = useState("");
+  const [affectsWallet, setAffectsWallet] = useState(true);
 
   const [payDialog, setPayDialog] = useState<any>(null);
   const [payAmount, setPayAmount] = useState("");
@@ -52,7 +54,7 @@ export default function DebtsPage() {
       return;
     }
     const amt = parseFloat(amount);
-    if (debtType === "lent") {
+    if (debtType === "lent" && affectsWallet) {
       const w = wallets?.find((w) => w.id === walletId);
       if (w && Number(w.balance) < amt) {
         toast.error("Insufficient wallet balance");
@@ -67,12 +69,14 @@ export default function DebtsPage() {
         wallet_id: walletId,
         date: debtDate,
         note: debtNote || undefined,
+        affects_wallet: affectsWallet,
       });
       toast.success("Debt recorded!");
       setShowCreate(false);
       setPersonName("");
       setAmount("");
       setDebtNote("");
+      setAffectsWallet(true);
     } catch (e) {
       toast.error(mapSupabaseError(e));
     }
