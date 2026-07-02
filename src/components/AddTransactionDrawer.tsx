@@ -13,6 +13,8 @@ import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { format } from "date-fns";
 import { Plus } from "lucide-react";
 
+const PREBUILT_CATEGORIES = ["🍔 Food", "🏠 Home Rent", "🚌 Transport"];
+
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -47,6 +49,11 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
     return pastCategories.filter((c) => c.toLowerCase().includes(category.toLowerCase()));
   }, [pastCategories, category]);
 
+  const filteredPrebuilt = useMemo(() => {
+    if (!category) return PREBUILT_CATEGORIES;
+    return PREBUILT_CATEGORIES.filter((c) => c.toLowerCase().includes(category.toLowerCase()));
+  }, [category]);
+
   useEffect(() => {
     if (open) {
       setType(defaultType);
@@ -72,7 +79,11 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   }, []);
 
   const handleSubmit = async () => {
-    if (!amount || !walletId || !category.trim()) {
+    if (!category.trim()) {
+      toast.error("Please enter a category");
+      return;
+    }
+    if (!amount || !walletId) {
       toast.error("Fill in required fields");
       return;
     }
@@ -180,6 +191,31 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
                 ref={dropdownRef}
                 className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto"
               >
+                {filteredPrebuilt.length > 0 && (
+                  <>
+                    <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted/30">
+                      Suggestions
+                    </div>
+                    {filteredPrebuilt.map((c) => (
+                      <button
+                        key={`pb-${c}`}
+                        type="button"
+                        onClick={() => {
+                          setCategory(c);
+                          setCategoryDropdownOpen(false);
+                        }}
+                        className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors min-h-[44px] flex items-center"
+                      >
+                        {c}
+                      </button>
+                    ))}
+                  </>
+                )}
+                {filteredCategories.length > 0 && (
+                  <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted/30 border-t border-border">
+                    Your Categories
+                  </div>
+                )}
                 {filteredCategories.map((c) => (
                   <button
                     key={c}
@@ -193,7 +229,9 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
                     {c}
                   </button>
                 ))}
-                {category.trim() && !pastCategories.includes(category.trim()) && (
+                {category.trim() &&
+                  !pastCategories.includes(category.trim()) &&
+                  !PREBUILT_CATEGORIES.includes(category.trim()) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -203,11 +241,6 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
                   >
                     <Plus className="h-3 w-3" /> Add "{category.trim()}"
                   </button>
-                )}
-                {!category.trim() && pastCategories.length === 0 && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">
-                    Type to create your first category
-                  </div>
                 )}
               </div>
             )}
