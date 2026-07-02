@@ -121,7 +121,7 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   const isSubmitting = createTx.isPending || createRecurring.isPending;
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} dismissible={false}>
+    <Drawer open={open} onOpenChange={onOpenChange} dismissible={false} repositionInputs={false}>
       <DrawerContent className="bg-card border-border max-h-[80vh] md:max-h-[90vh]">
         <DrawerHeader>
           <DrawerTitle className="text-foreground tracking-tight">Add Transaction</DrawerTitle>
