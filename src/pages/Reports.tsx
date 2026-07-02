@@ -83,8 +83,29 @@ export default function Reports() {
   }, [allTxForMonth, daysInMonth]);
 
   const categoryData = useMemo(() => {
-    return Object.entries(expenseCategoryMap).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+    const entries = Object.entries(expenseCategoryMap)
+      .map(([name, value]) => ({ name, value }))
+      .sort((a, b) => b.value - a.value);
+    if (entries.length <= 6) return entries;
+    const top = entries.slice(0, 5);
+    const rest = entries.slice(5);
+    const othersTotal = rest.reduce((s, x) => s + x.value, 0);
+    return [...top, { name: "Others", value: othersTotal }];
   }, [expenseCategoryMap]);
+
+  const totalCategoryValue = useMemo(
+    () => categoryData.reduce((s, x) => s + x.value, 0),
+    [categoryData]
+  );
+
+  // Format day-labels as e.g. "Apr 1" for bar chart
+  const dailyChartData = useMemo(() => {
+    const monthDate = parse(month, "yyyy-MM", new Date());
+    return dailyData.map((d) => ({
+      ...d,
+      label: format(new Date(monthDate.getFullYear(), monthDate.getMonth(), d.day), "MMM d"),
+    }));
+  }, [dailyData, month]);
 
   const categories = [...new Set(allTxForMonth.map((t) => t.category))];
 
@@ -178,14 +199,36 @@ export default function Reports() {
       {/* Bar chart */}
       <div className="vault-card p-4 md:p-5 overflow-hidden">
         <h3 className="wallet-label mb-4">Daily Income vs Expense</h3>
-        <div className="w-full overflow-hidden" style={{ height: 256 }}>
+        <div className="w-full overflow-hidden" style={{ height: 320 }}>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={dailyData}>
-              <XAxis dataKey="day" tick={{ fill: "hsl(155,20%,60%)", fontSize: 10 }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fill: "hsl(155,20%,60%)", fontSize: 10 }} tickLine={false} axisLine={false} width={40} />
-              <Tooltip contentStyle={{ backgroundColor: "hsl(150,30%,12%)", border: "1px solid hsl(150,15%,20%)", borderRadius: "12px", color: "#fff" }} />
-              <Bar dataKey="income" fill="hsl(152,38%,52%)" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="expense" fill="hsl(16,72%,61%)" radius={[4, 4, 0, 0]} />
+            <BarChart data={dailyChartData} margin={{ top: 10, right: 10, left: 0, bottom: 24 }}>
+              <XAxis
+                dataKey="label"
+                tick={{ fill: "hsl(155,20%,70%)", fontSize: 12 }}
+                tickLine={false}
+                axisLine={{ stroke: "hsl(150,15%,20%)" }}
+                interval="preserveStartEnd"
+                minTickGap={16}
+              />
+              <YAxis
+                tick={{ fill: "hsl(155,20%,70%)", fontSize: 12 }}
+                tickLine={false}
+                axisLine={{ stroke: "hsl(150,15%,20%)" }}
+                width={48}
+                tickFormatter={(v) => `৳${v >= 1000 ? (v / 1000).toFixed(1) + "k" : v}`}
+              />
+              <Tooltip
+                contentStyle={{ backgroundColor: "hsl(150,30%,12%)", border: "1px solid hsl(150,15%,20%)", borderRadius: "12px", color: "#fff", fontSize: 12 }}
+                formatter={(v: any, name: any) => [`৳${Number(v).toLocaleString()}`, name === "income" ? "Income" : "Expense"]}
+              />
+              <Legend
+                verticalAlign="top"
+                height={30}
+                wrapperStyle={{ fontSize: 12, color: "hsl(155,20%,70%)" }}
+                formatter={(value: string) => (value === "income" ? "Income" : "Expense")}
+              />
+              <Bar dataKey="income" name="income" fill="hsl(152,55%,50%)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="expense" name="expense" fill="hsl(0,72%,58%)" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -195,16 +238,40 @@ export default function Reports() {
       {categoryData.length > 0 && (
         <div className="vault-card p-4 md:p-5 overflow-hidden">
           <h3 className="wallet-label mb-4">Expense by Category</h3>
-          <div className="h-64">
+          <div style={{ height: 320 }} className="w-full overflow-hidden">
             <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={categoryData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={40}>
+              <PieChart margin={{ top: 10, right: 10, bottom: 10, left: 10 }}>
+                <Pie
+                  data={categoryData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="45%"
+                  outerRadius="65%"
+                  innerRadius="35%"
+                  labelLine
+                  label={({ name, percent }: any) =>
+                    `${name} ${(percent * 100).toFixed(0)}%`
+                  }
+                >
                   {categoryData.map((_, i) => (
                     <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
                   ))}
                 </Pie>
-                <Legend wrapperStyle={{ fontSize: 12, color: "hsl(155,20%,60%)" }} />
-                <Tooltip contentStyle={{ backgroundColor: "hsl(150,30%,12%)", border: "1px solid hsl(150,15%,20%)", borderRadius: "12px", color: "#fff" }} />
+                <Legend
+                  verticalAlign="bottom"
+                  wrapperStyle={{ fontSize: 12, color: "hsl(155,20%,70%)" }}
+                  formatter={(value: string) => {
+                    const item = categoryData.find((c) => c.name === value);
+                    if (!item) return value;
+                    const pct = totalCategoryValue > 0 ? ((item.value / totalCategoryValue) * 100).toFixed(0) : "0";
+                    return `${value} · ৳${item.value.toLocaleString()} (${pct}%)`;
+                  }}
+                />
+                <Tooltip
+                  contentStyle={{ backgroundColor: "hsl(150,30%,12%)", border: "1px solid hsl(150,15%,20%)", borderRadius: "12px", color: "#fff", fontSize: 12 }}
+                  formatter={(v: any, name: any) => [`৳${Number(v).toLocaleString()}`, name]}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
