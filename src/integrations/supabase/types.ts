@@ -295,7 +295,9 @@ export type Database = {
           created_at: string
           deadline: string | null
           emoji: string | null
+          has_opening_balance: boolean
           id: string
+          opening_balance: number
           saved_amount: number
           target_amount: number
           title: string
@@ -306,7 +308,9 @@ export type Database = {
           created_at?: string
           deadline?: string | null
           emoji?: string | null
+          has_opening_balance?: boolean
           id?: string
+          opening_balance?: number
           saved_amount?: number
           target_amount: number
           title: string
@@ -317,7 +321,9 @@ export type Database = {
           created_at?: string
           deadline?: string | null
           emoji?: string | null
+          has_opening_balance?: boolean
           id?: string
+          opening_balance?: number
           saved_amount?: number
           target_amount?: number
           title?: string
