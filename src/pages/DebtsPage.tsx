@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { motion, AnimatePresence } from "framer-motion";
@@ -31,6 +32,7 @@ export default function DebtsPage() {
   const [walletId, setWalletId] = useState("");
   const [debtDate, setDebtDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [debtNote, setDebtNote] = useState("");
+  const [affectsWallet, setAffectsWallet] = useState(true);
 
   const [payDialog, setPayDialog] = useState<any>(null);
   const [payAmount, setPayAmount] = useState("");
@@ -52,7 +54,7 @@ export default function DebtsPage() {
       return;
     }
     const amt = parseFloat(amount);
-    if (debtType === "lent") {
+    if (debtType === "lent" && affectsWallet) {
       const w = wallets?.find((w) => w.id === walletId);
       if (w && Number(w.balance) < amt) {
         toast.error("Insufficient wallet balance");
@@ -67,12 +69,14 @@ export default function DebtsPage() {
         wallet_id: walletId,
         date: debtDate,
         note: debtNote || undefined,
+        affects_wallet: affectsWallet,
       });
       toast.success("Debt recorded!");
       setShowCreate(false);
       setPersonName("");
       setAmount("");
       setDebtNote("");
+      setAffectsWallet(true);
     } catch (e) {
       toast.error(mapSupabaseError(e));
     }
@@ -463,6 +467,17 @@ export default function DebtsPage() {
             <div className="space-y-2">
               <Label>Note (optional)</Label>
               <Input value={debtNote} onChange={(e) => setDebtNote(e.target.value)} placeholder="Reason..." className="bg-secondary border-border" />
+            </div>
+            <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/30">
+              <div className="pr-3">
+                <p className="text-sm font-medium text-foreground">Affect wallet balance?</p>
+                <p className="text-xs text-muted-foreground">
+                  {affectsWallet
+                    ? "Wallet will update normally"
+                    : "Use this for past debts not tracked in your wallet"}
+                </p>
+              </div>
+              <Switch checked={affectsWallet} onCheckedChange={setAffectsWallet} />
             </div>
             <Button onClick={handleCreate} disabled={createDebt.isPending} className="w-full bg-primary text-primary-foreground">
               {createDebt.isPending ? "Saving..." : "Save Debt"}

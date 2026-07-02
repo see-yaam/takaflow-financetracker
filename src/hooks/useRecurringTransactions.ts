@@ -29,7 +29,7 @@ export function useCreateRecurring() {
       const parsed = recurringCreateSchema.parse(r);
       const { data, error } = await supabase
         .from("recurring_transactions")
-        .insert({ ...parsed, user_id: user!.id })
+        .insert({ ...parsed, user_id: user!.id } as any)
         .select()
         .single();
       throwIfSupabaseError(error);

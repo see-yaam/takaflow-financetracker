@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useWallets } from "@/hooks/useWallets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,7 @@ import { ArrowRightLeft } from "lucide-react";
 
 export default function SettingsTransferSection() {
   const { data: wallets } = useWallets();
+  const qc = useQueryClient();
   const [transferFrom, setTransferFrom] = useState("");
   const [transferTo, setTransferTo] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
@@ -50,7 +52,8 @@ export default function SettingsTransferSection() {
 
       toast.success("Transfer completed");
       setTransferAmount("");
-      window.location.reload();
+      qc.invalidateQueries({ queryKey: ["wallets"] });
+      qc.invalidateQueries({ queryKey: ["transactions"] });
     } catch (e) {
       toast.error(mapSupabaseError(e));
     } finally {

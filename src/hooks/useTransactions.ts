@@ -42,7 +42,7 @@ export function useCreateTransaction() {
       });
       const { data, error } = await supabase
         .from("transactions")
-        .insert({ ...parsed, user_id: user!.id })
+        .insert({ ...parsed, user_id: user!.id } as any)
         .select()
         .single();
       throwIfSupabaseError(error);
