@@ -67,7 +67,7 @@ export default function Onboarding() {
           balance: parseFloat(w.balance) || 0,
           icon: w.icon,
           currency: w.currency,
-        });
+        }) as { name: string; balance: number; icon: string; currency: string };
         await createWallet.mutateAsync(parsed);
       }
       toast.success("Wallets initialized!");

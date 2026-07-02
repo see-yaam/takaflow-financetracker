@@ -20,7 +20,7 @@ export default function Login() {
     if (loading) return;
     setLoading(true);
     try {
-      const parsed = loginSchema.parse({ email, password });
+      const parsed = loginSchema.parse({ email, password }) as { email: string; password: string };
       const { error } = await supabase.auth.signInWithPassword(parsed);
       if (error) throw error;
       navigate("/");
