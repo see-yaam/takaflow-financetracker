@@ -468,6 +468,17 @@ export default function DebtsPage() {
               <Label>Note (optional)</Label>
               <Input value={debtNote} onChange={(e) => setDebtNote(e.target.value)} placeholder="Reason..." className="bg-secondary border-border" />
             </div>
+            <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/30">
+              <div className="pr-3">
+                <p className="text-sm font-medium text-foreground">Affect wallet balance?</p>
+                <p className="text-xs text-muted-foreground">
+                  {affectsWallet
+                    ? "Wallet will update normally"
+                    : "Use this for past debts not tracked in your wallet"}
+                </p>
+              </div>
+              <Switch checked={affectsWallet} onCheckedChange={setAffectsWallet} />
+            </div>
             <Button onClick={handleCreate} disabled={createDebt.isPending} className="w-full bg-primary text-primary-foreground">
               {createDebt.isPending ? "Saving..." : "Save Debt"}
             </Button>
