@@ -85,3 +85,19 @@ export function useReverseTransaction() {
     },
   });
 }
+
+export function useUpdateTransactionCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, category }: { id: string; category: string }) => {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ category: category.trim() } as any)
+        .eq("id", id);
+      throwIfSupabaseError(error);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+    },
+  });
+}
