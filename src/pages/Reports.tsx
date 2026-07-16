@@ -339,15 +339,32 @@ export default function Reports() {
                       <p className="text-xs text-muted-foreground break-words">{t.wallets?.name} · {format(new Date(t.date), "MMM d")}{t.note ? ` · ${t.note}` : ""}</p>
                     </div>
                   </div>
-                  <span className={`text-sm font-medium tabular-nums shrink-0 ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
-                    {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-sm font-medium tabular-nums ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
+                      {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </span>
+                    {!isReversed && (
+                      <button
+                        onClick={() => setEditTarget(t)}
+                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        title="Edit category"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
       </div>
+      <EditCategoryDialog
+        open={!!editTarget}
+        onOpenChange={(o) => !o && setEditTarget(null)}
+        transactionId={editTarget?.id ?? null}
+        currentCategory={editTarget?.category ?? ""}
+      />
     </div>
   );
 }

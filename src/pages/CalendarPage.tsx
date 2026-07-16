@@ -176,6 +176,15 @@ export default function CalendarPage() {
                       </span>
                       {!isReversed && (
                         <button
+                          onClick={() => setEditTarget(t)}
+                          className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          title="Edit category"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {!isReversed && (
+                        <button
                           onClick={() => setReverseTarget(t)}
                           className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                           title="Reverse"
