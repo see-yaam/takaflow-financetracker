@@ -9,6 +9,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { motion } from "framer-motion";
 import AIInsights from "@/components/AIInsights";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
+import EditCategoryDialog from "@/components/EditCategoryDialog";
+import { Pencil } from "lucide-react";
 
 const CHART_COLORS = ["hsl(152,38%,52%)", "hsl(29,87%,67%)", "hsl(16,72%,61%)", "hsl(200,60%,50%)", "hsl(280,40%,60%)", "hsl(50,80%,55%)", "hsl(330,50%,55%)"];
 
@@ -23,6 +25,7 @@ export default function Reports() {
   const [month, setMonth] = useState(months[0].value);
   const [filterWallet, setFilterWallet] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [editTarget, setEditTarget] = useState<any>(null);
 
   const { data: transactions } = useTransactions({ month, walletId: filterWallet === "all" ? undefined : filterWallet, category: filterCategory === "all" ? undefined : filterCategory });
   const { data: wallets } = useWallets();
