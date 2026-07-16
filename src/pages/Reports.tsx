@@ -9,6 +9,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 import { motion } from "framer-motion";
 import AIInsights from "@/components/AIInsights";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
+import EditCategoryDialog from "@/components/EditCategoryDialog";
+import { Pencil } from "lucide-react";
 
 const CHART_COLORS = ["hsl(152,38%,52%)", "hsl(29,87%,67%)", "hsl(16,72%,61%)", "hsl(200,60%,50%)", "hsl(280,40%,60%)", "hsl(50,80%,55%)", "hsl(330,50%,55%)"];
 
@@ -23,6 +25,7 @@ export default function Reports() {
   const [month, setMonth] = useState(months[0].value);
   const [filterWallet, setFilterWallet] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [editTarget, setEditTarget] = useState<any>(null);
 
   const { data: transactions } = useTransactions({ month, walletId: filterWallet === "all" ? undefined : filterWallet, category: filterCategory === "all" ? undefined : filterCategory });
   const { data: wallets } = useWallets();
@@ -339,15 +342,32 @@ export default function Reports() {
                       <p className="text-xs text-muted-foreground break-words">{t.wallets?.name} · {format(new Date(t.date), "MMM d")}{t.note ? ` · ${t.note}` : ""}</p>
                     </div>
                   </div>
-                  <span className={`text-sm font-medium tabular-nums shrink-0 ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
-                    {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
-                  </span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-sm font-medium tabular-nums ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
+                      {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </span>
+                    {!isReversed && (
+                      <button
+                        onClick={() => setEditTarget(t)}
+                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        title="Edit category"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
                 </div>
               );
             })}
           </div>
         )}
       </div>
+      <EditCategoryDialog
+        open={!!editTarget}
+        onOpenChange={(o) => !o && setEditTarget(null)}
+        transactionId={editTarget?.id ?? null}
+        currentCategory={editTarget?.category ?? ""}
+      />
     </div>
   );
 }
