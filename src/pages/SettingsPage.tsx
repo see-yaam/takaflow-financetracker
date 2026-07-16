@@ -5,6 +5,7 @@ import SignOutConfirmDialog from "@/components/SignOutConfirmDialog";
 import SettingsWalletsSection from "@/components/settings/SettingsWalletsSection";
 import SettingsTransferSection from "@/components/settings/SettingsTransferSection";
 import SettingsRecurringSection from "@/components/settings/SettingsRecurringSection";
+import SettingsCategoriesSection from "@/components/settings/SettingsCategoriesSection";
 import SettingsAccountSection from "@/components/settings/SettingsAccountSection";
 import SettingsDangerZone from "@/components/settings/SettingsDangerZone";
 import { supabase } from "@/integrations/supabase/client";
@@ -25,6 +26,7 @@ export default function SettingsPage() {
     setResetting(true);
     try {
       const tables = [
+        "custom_categories",
         "debt_additions",
         "debt_payments",
         "debts",
@@ -62,6 +64,7 @@ export default function SettingsPage() {
       <SettingsWalletsSection />
       <SettingsTransferSection />
       <SettingsRecurringSection />
+      <SettingsCategoriesSection />
       <SettingsAccountSection onSignOutClick={() => setSignOutOpen(true)} />
       <SettingsDangerZone
         resetOpen={resetOpen}

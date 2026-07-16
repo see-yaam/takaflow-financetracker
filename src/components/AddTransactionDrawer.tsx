@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,14 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useWallets } from "@/hooks/useWallets";
-import { useCreateTransaction, useTransactions } from "@/hooks/useTransactions";
+import { useCreateTransaction } from "@/hooks/useTransactions";
 import { useCreateRecurring } from "@/hooks/useRecurringTransactions";
 import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { format } from "date-fns";
-import { Plus } from "lucide-react";
-
-const PREBUILT_CATEGORIES = ["🍔 Food", "🏠 Home Rent", "🚌 Transport"];
+import CategoryPicker from "@/components/CategoryPicker";
 
 interface Props {
   open: boolean;
@@ -24,7 +22,6 @@ interface Props {
 
 export default function AddTransactionDrawer({ open, onOpenChange, defaultType = "expense", defaultDate }: Props) {
   const { data: wallets } = useWallets();
-  const { data: allTransactions } = useTransactions();
   const createTx = useCreateTransaction();
   const createRecurring = useCreateRecurring();
   const [type, setType] = useState<"income" | "expense">(defaultType);
@@ -34,25 +31,6 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   const [note, setNote] = useState("");
   const [date, setDate] = useState(defaultDate || format(new Date(), "yyyy-MM-dd"));
   const [recurring, setRecurring] = useState(false);
-  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
-  const categoryInputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
-  const pastCategories = useMemo(() => {
-    if (!allTransactions) return [];
-    const unique = [...new Set(allTransactions.map((t: any) => t.category))];
-    return unique.sort();
-  }, [allTransactions]);
-
-  const filteredCategories = useMemo(() => {
-    if (!category) return pastCategories;
-    return pastCategories.filter((c) => c.toLowerCase().includes(category.toLowerCase()));
-  }, [pastCategories, category]);
-
-  const filteredPrebuilt = useMemo(() => {
-    if (!category) return PREBUILT_CATEGORIES;
-    return PREBUILT_CATEGORIES.filter((c) => c.toLowerCase().includes(category.toLowerCase()));
-  }, [category]);
 
   useEffect(() => {
     if (open) {
@@ -63,20 +41,8 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
       setNote("");
       setDate(defaultDate || format(new Date(), "yyyy-MM-dd"));
       setRecurring(false);
-      setCategoryDropdownOpen(false);
     }
   }, [open]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
-          categoryInputRef.current && !categoryInputRef.current.contains(e.target as Node)) {
-        setCategoryDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
 
   const handleSubmit = async () => {
     if (!category.trim()) {
@@ -172,78 +138,9 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
           </div>
 
           {/* Category with autocomplete */}
-          <div className="space-y-2 relative">
+          <div className="space-y-2">
             <Label>Category</Label>
-            <Input
-              ref={categoryInputRef}
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                setCategoryDropdownOpen(true);
-              }}
-              onFocus={() => setCategoryDropdownOpen(true)}
-              placeholder="Type or select a category..."
-              className="bg-secondary border-border min-h-[44px]"
-              autoComplete="off"
-            />
-            {categoryDropdownOpen && (
-              <div
-                ref={dropdownRef}
-                className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto"
-              >
-                {filteredPrebuilt.length > 0 && (
-                  <>
-                    <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted/30">
-                      Suggestions
-                    </div>
-                    {filteredPrebuilt.map((c) => (
-                      <button
-                        key={`pb-${c}`}
-                        type="button"
-                        onClick={() => {
-                          setCategory(c);
-                          setCategoryDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors min-h-[44px] flex items-center"
-                      >
-                        {c}
-                      </button>
-                    ))}
-                  </>
-                )}
-                {filteredCategories.length > 0 && (
-                  <div className="px-3 py-1 text-[10px] uppercase tracking-wider text-muted-foreground bg-muted/30 border-t border-border">
-                    Your Categories
-                  </div>
-                )}
-                {filteredCategories.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => {
-                      setCategory(c);
-                      setCategoryDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors min-h-[44px] flex items-center"
-                  >
-                    {c}
-                  </button>
-                ))}
-                {category.trim() &&
-                  !pastCategories.includes(category.trim()) &&
-                  !PREBUILT_CATEGORIES.includes(category.trim()) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCategoryDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-muted/50 transition-colors flex items-center gap-1 border-t border-border min-h-[44px]"
-                  >
-                    <Plus className="h-3 w-3" /> Add "{category.trim()}"
-                  </button>
-                )}
-              </div>
-            )}
+            <CategoryPicker value={category} onChange={setCategory} />
           </div>
 
           <div className="space-y-2">
