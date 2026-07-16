@@ -1,10 +1,11 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths } from "date-fns";
 import { useTransactions, useReverseTransaction } from "@/hooks/useTransactions";
-import { ChevronLeft, ChevronRight, Plus, Undo2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Plus, Undo2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
+import EditCategoryDialog from "@/components/EditCategoryDialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -18,6 +19,7 @@ export default function CalendarPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [reverseTarget, setReverseTarget] = useState<any>(null);
+  const [editTarget, setEditTarget] = useState<any>(null);
 
   const month = format(currentDate, "yyyy-MM");
   const { data: transactions } = useTransactions({ month });
@@ -232,6 +234,12 @@ export default function CalendarPage() {
         open={drawerOpen}
         onOpenChange={setDrawerOpen}
         defaultDate={selectedDate ? format(selectedDate, "yyyy-MM-dd") : undefined}
+      />
+      <EditCategoryDialog
+        open={!!editTarget}
+        onOpenChange={(o) => !o && setEditTarget(null)}
+        transactionId={editTarget?.id ?? null}
+        currentCategory={editTarget?.category ?? ""}
       />
 
       {/* Reverse confirmation dialog */}
