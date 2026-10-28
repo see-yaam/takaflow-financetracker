@@ -1,4 +1,4 @@
-﻿name: Build & Package Android APK
+name: Build & Package Android APK
 
 on:
   push:
@@ -45,9 +45,10 @@ jobs:
           java-version: '21'
           cache: 'gradle'
 
-      - name: Accept Android SDK licenses
+      - name: Accept Android SDK licenses & install platform 36
         run: |
           yes | sdkmanager --licenses 2>/dev/null || true
+          sdkmanager "platforms;android-36" 2>/dev/null || true
 
       - name: Copy web assets into Android project
         run: |
