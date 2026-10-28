@@ -9,10 +9,11 @@ import { useDebts } from "@/hooks/useDebts";
 import { useCurrencyRates, convertToBDT } from "@/hooks/useCurrencyRates";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
-import { Smartphone, Landmark, Wallet, Plus, TrendingUp, TrendingDown, ArrowUpDown, Undo2, Pencil } from "lucide-react";
+import { Smartphone, Landmark, Wallet, Plus, TrendingUp, TrendingDown, ArrowUpDown, Undo2, Pencil, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
 import EditCategoryDialog from "@/components/EditCategoryDialog";
+import VoiceTransactionModal from "@/components/voice/VoiceTransactionModal";
 import BudgetProgressBar from "@/components/BudgetProgressBar";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -40,6 +41,7 @@ export default function Dashboard() {
   const [drawerType, setDrawerType] = useState<"income" | "expense">("expense");
   const [reverseTarget, setReverseTarget] = useState<any>(null);
   const [editTarget, setEditTarget] = useState<any>(null);
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   const applyRecurring = useApplyRecurring();
   const reverseMutation = useReverseTransaction();
@@ -194,14 +196,22 @@ export default function Dashboard() {
           </div>
         </div>
 
-        <div className="vault-card p-5 flex flex-col justify-center gap-3">
+        <div className="vault-card p-5 flex flex-col justify-center gap-2.5">
           <h3 className="wallet-label mb-1">Quick Actions</h3>
-          <Button onClick={() => openDrawer("income")} className="bg-primary/15 text-primary hover:bg-primary/25 border-0">
-            <Plus className="h-4 w-4 mr-2" /> Add Income
+          <Button
+            onClick={() => setVoiceOpen(true)}
+            className="bg-gradient-to-r from-primary/20 via-primary/30 to-emerald-500/20 text-foreground hover:from-primary/30 hover:to-emerald-500/30 border border-primary/40 font-semibold shadow-sm"
+          >
+            <Mic className="h-4 w-4 mr-2 text-primary animate-pulse" /> Voice Add (মুখে বলুন)
           </Button>
-          <Button onClick={() => openDrawer("expense")} variant="outline" className="border-border text-foreground hover:bg-muted/50">
-            <Plus className="h-4 w-4 mr-2" /> Add Expense
-          </Button>
+          <div className="grid grid-cols-2 gap-2">
+            <Button onClick={() => openDrawer("income")} size="sm" className="bg-primary/15 text-primary hover:bg-primary/25 border-0">
+              <Plus className="h-3.5 w-3.5 mr-1.5" /> Income
+            </Button>
+            <Button onClick={() => openDrawer("expense")} size="sm" variant="outline" className="border-border text-foreground hover:bg-muted/50">
+              <Plus className="h-3.5 w-3.5 mr-1.5" /> Expense
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -287,6 +297,8 @@ export default function Dashboard() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <VoiceTransactionModal open={voiceOpen} onOpenChange={setVoiceOpen} />
     </div>
   );
 }

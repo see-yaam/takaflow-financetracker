@@ -1,9 +1,10 @@
 import { Outlet, useLocation, Link } from "react-router-dom";
-import { LayoutDashboard, Calendar, BarChart3, Wallet, LogOut, Target, Handshake, User } from "lucide-react";
+import { LayoutDashboard, Calendar, BarChart3, Wallet, LogOut, Target, Handshake, User, Mic } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import SignOutConfirmDialog from "@/components/SignOutConfirmDialog";
+import VoiceTransactionModal from "@/components/voice/VoiceTransactionModal";
 import { useAutoSmsSync } from "@/hooks/useAutoSmsSync";
 
 const navItems = [
@@ -28,6 +29,7 @@ export default function AppLayout() {
   const { pathname } = useLocation();
   const { user, signOut } = useAuth();
   const [signOutOpen, setSignOutOpen] = useState(false);
+  const [voiceOpen, setVoiceOpen] = useState(false);
 
   // Background SMS Sync for Mobile Native Environment
   useAutoSmsSync();
@@ -132,6 +134,22 @@ export default function AppLayout() {
           </Link>
         ))}
       </nav>
+
+      {/* Floating Voice Assistant Button */}
+      <button
+        type="button"
+        onClick={() => setVoiceOpen(true)}
+        className="fixed bottom-20 right-4 md:bottom-8 md:right-8 z-40 h-13 w-13 rounded-full bg-gradient-to-tr from-primary to-emerald-500 text-primary-foreground shadow-xl shadow-primary/25 flex items-center justify-center hover:scale-105 active:scale-95 transition-all p-3 border-2 border-background/80 group"
+        title="Voice Expense Assistant (মুখে বলুন)"
+        aria-label="Voice Expense Assistant"
+      >
+        <Mic className="h-6 w-6 group-hover:scale-110 transition-transform" />
+      </button>
+
+      <VoiceTransactionModal
+        open={voiceOpen}
+        onOpenChange={setVoiceOpen}
+      />
 
       <SignOutConfirmDialog
         open={signOutOpen}
