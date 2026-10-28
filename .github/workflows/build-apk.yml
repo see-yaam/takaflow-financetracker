@@ -58,11 +58,11 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
-      - name: Build Android Debug APK
+      - name: Build Android Release APK
         run: |
           set -o pipefail
           cd android
-          ./gradlew assembleDebug --stacktrace 2>&1 | tee ../gradle-build.log
+          ./gradlew assembleRelease --stacktrace 2>&1 | tee ../gradle-build.log
 
       - name: Report Build Error on Failure
         if: failure()
@@ -80,10 +80,12 @@ jobs:
         run: |
           echo "Listing all built APK files:"
           find android/ -name "*.apk" -ls
-          if [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
+          if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
+            APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
+          elif [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
             APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
           else
-            APK_PATH=$(find android/ -name "*debug*.apk" | head -n 1)
+            APK_PATH=$(find android/ -name "*.apk" | head -n 1)
           fi
           if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
             echo "::error::No APK file found in android/ directory!"
@@ -93,7 +95,7 @@ jobs:
           cp "$APK_PATH" TakaFlow.apk
           ls -lh TakaFlow.apk
           echo "### 📱 TakaFlow Android APK Ready!" >> $GITHUB_STEP_SUMMARY
-          echo "Successfully built and packaged \`TakaFlow.apk\`." >> $GITHUB_STEP_SUMMARY
+          echo "Successfully built and packaged signed release \`TakaFlow.apk\`." >> $GITHUB_STEP_SUMMARY
 
       - name: Upload build log on failure
         if: failure()
