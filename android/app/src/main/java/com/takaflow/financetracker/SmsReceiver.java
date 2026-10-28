@@ -1,4 +1,4 @@
-package com.takaflow.app;
+package com.takaflow.financetracker;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;

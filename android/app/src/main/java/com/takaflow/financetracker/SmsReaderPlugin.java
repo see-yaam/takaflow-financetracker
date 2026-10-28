@@ -1,4 +1,4 @@
-package com.takaflow.app;
+package com.takaflow.financetracker;
 
 import android.content.Context;
 import android.content.SharedPreferences;
