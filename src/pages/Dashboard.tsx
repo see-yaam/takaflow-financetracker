@@ -9,9 +9,10 @@ import { useDebts } from "@/hooks/useDebts";
 import { useCurrencyRates, convertToBDT } from "@/hooks/useCurrencyRates";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
-import { Smartphone, Landmark, Wallet, Plus, TrendingUp, TrendingDown, ArrowUpDown, Undo2 } from "lucide-react";
+import { Smartphone, Landmark, Wallet, Plus, TrendingUp, TrendingDown, ArrowUpDown, Undo2, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
+import EditCategoryDialog from "@/components/EditCategoryDialog";
 import BudgetProgressBar from "@/components/BudgetProgressBar";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -38,6 +39,7 @@ export default function Dashboard() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerType, setDrawerType] = useState<"income" | "expense">("expense");
   const [reverseTarget, setReverseTarget] = useState<any>(null);
+  const [editTarget, setEditTarget] = useState<any>(null);
 
   const applyRecurring = useApplyRecurring();
   const reverseMutation = useReverseTransaction();
@@ -232,6 +234,15 @@ export default function Dashboard() {
                     </span>
                     {!isReversed && (
                       <button
+                        onClick={() => setEditTarget(t)}
+                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        title="Edit category"
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {!isReversed && (
+                      <button
                         onClick={() => setReverseTarget(t)}
                         className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
                         title="Reverse"
@@ -248,6 +259,12 @@ export default function Dashboard() {
       </div>
 
       <AddTransactionDrawer open={drawerOpen} onOpenChange={setDrawerOpen} defaultType={drawerType} />
+      <EditCategoryDialog
+        open={!!editTarget}
+        onOpenChange={(o) => !o && setEditTarget(null)}
+        transactionId={editTarget?.id ?? null}
+        currentCategory={editTarget?.category ?? ""}
+      />
 
       {/* Reverse confirmation dialog */}
       <AlertDialog open={!!reverseTarget} onOpenChange={(open) => !open && setReverseTarget(null)}>

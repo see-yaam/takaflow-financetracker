@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,13 +6,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useWallets } from "@/hooks/useWallets";
-import { useCreateTransaction, useTransactions } from "@/hooks/useTransactions";
+import { useCreateTransaction } from "@/hooks/useTransactions";
 import { useCreateRecurring } from "@/hooks/useRecurringTransactions";
 import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { format } from "date-fns";
-import { Plus, Sparkles, ClipboardPaste } from "lucide-react";
+import { Sparkles, ClipboardPaste } from "lucide-react";
 import { parseBangladeshFinancialSms } from "@/lib/smsParser";
+import CategoryPicker from "@/components/CategoryPicker";
 
 interface Props {
   open: boolean;
@@ -21,32 +22,8 @@ interface Props {
   defaultDate?: string;
 }
 
-const DEFAULT_EXPENSE_CATEGORIES = [
-  "Education",
-  "Entertainment",
-  "Food & Dining",
-  "Groceries",
-  "Healthcare",
-  "Other",
-  "Rent & Housing",
-  "Shopping",
-  "Transport",
-  "Utilities",
-];
-
-const DEFAULT_INCOME_CATEGORIES = [
-  "Business",
-  "Freelance",
-  "Gift",
-  "Investment",
-  "Other",
-  "Salary",
-];
-
 export default function AddTransactionDrawer({ open, onOpenChange, defaultType = "expense", defaultDate }: Props) {
   const { data: wallets } = useWallets();
-  const currentMonth = useMemo(() => format(new Date(), "yyyy-MM"), []);
-  const { data: monthTransactions } = useTransactions({ month: currentMonth });
   const createTx = useCreateTransaction();
   const createRecurring = useCreateRecurring();
   const [type, setType] = useState<"income" | "expense">(defaultType);
@@ -56,11 +33,8 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   const [note, setNote] = useState("");
   const [date, setDate] = useState(defaultDate || format(new Date(), "yyyy-MM-dd"));
   const [recurring, setRecurring] = useState(false);
-  const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
   const [smsInput, setSmsInput] = useState("");
   const [showSmsBox, setShowSmsBox] = useState(false);
-  const categoryInputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const handleParseSms = (textToParse?: string) => {
     const text = (textToParse ?? smsInput).trim();
@@ -108,18 +82,6 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
     }
   };
 
-  const pastCategories = useMemo(() => {
-    const baseSuggestions = type === "expense" ? DEFAULT_EXPENSE_CATEGORIES : DEFAULT_INCOME_CATEGORIES;
-    const recent = monthTransactions ? monthTransactions.map((t: any) => t.category).filter(Boolean) : [];
-    const unique = Array.from(new Set([...baseSuggestions, ...recent]));
-    return unique.sort();
-  }, [monthTransactions, type]);
-
-  const filteredCategories = useMemo(() => {
-    if (!category) return pastCategories;
-    return pastCategories.filter((c) => c.toLowerCase().includes(category.toLowerCase()));
-  }, [pastCategories, category]);
-
   useEffect(() => {
     if (open) {
       setType(defaultType);
@@ -129,23 +91,15 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
       setNote("");
       setDate(defaultDate || format(new Date(), "yyyy-MM-dd"));
       setRecurring(false);
-      setCategoryDropdownOpen(false);
     }
-  }, [open]);
-
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node) &&
-          categoryInputRef.current && !categoryInputRef.current.contains(e.target as Node)) {
-        setCategoryDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, []);
+  }, [open, defaultType, defaultDate, wallets]);
 
   const handleSubmit = async () => {
-    if (!amount || !walletId || !category.trim()) {
+    if (!category.trim()) {
+      toast.error("Please enter a category");
+      return;
+    }
+    if (!amount || !walletId) {
       toast.error("Fill in required fields");
       return;
     }
@@ -183,7 +137,7 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   const isSubmitting = createTx.isPending || createRecurring.isPending;
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange} dismissible={false}>
+    <Drawer open={open} onOpenChange={onOpenChange} dismissible={false} repositionInputs={false}>
       <DrawerContent className="bg-card border-border max-h-[80vh] md:max-h-[90vh]">
         <DrawerHeader>
           <DrawerTitle className="text-foreground tracking-tight">Add Transaction</DrawerTitle>
@@ -271,57 +225,10 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
             </Select>
           </div>
 
-          {/* Category with autocomplete */}
-          <div className="space-y-2 relative">
+          {/* Category with CategoryPicker */}
+          <div className="space-y-2">
             <Label>Category</Label>
-            <Input
-              ref={categoryInputRef}
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                setCategoryDropdownOpen(true);
-              }}
-              onFocus={() => setCategoryDropdownOpen(true)}
-              placeholder="Type or select a category..."
-              className="bg-secondary border-border min-h-[44px]"
-              autoComplete="off"
-            />
-            {categoryDropdownOpen && (
-              <div
-                ref={dropdownRef}
-                className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-48 overflow-y-auto"
-              >
-                {filteredCategories.map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => {
-                      setCategory(c);
-                      setCategoryDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-muted/50 transition-colors min-h-[44px] flex items-center"
-                  >
-                    {c}
-                  </button>
-                ))}
-                {category.trim() && !pastCategories.includes(category.trim()) && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setCategoryDropdownOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm text-primary hover:bg-muted/50 transition-colors flex items-center gap-1 border-t border-border min-h-[44px]"
-                  >
-                    <Plus className="h-3 w-3" /> Add "{category.trim()}"
-                  </button>
-                )}
-                {!category.trim() && pastCategories.length === 0 && (
-                  <div className="px-3 py-2 text-sm text-muted-foreground">
-                    Type to create your first category
-                  </div>
-                )}
-              </div>
-            )}
+            <CategoryPicker value={category} onChange={setCategory} />
           </div>
 
           <div className="space-y-2">

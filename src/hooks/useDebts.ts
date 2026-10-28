@@ -64,8 +64,10 @@ export function useCreateDebt() {
       wallet_id: string;
       date: string;
       note?: string;
+      affects_wallet?: boolean;
     }) => {
-      const parsed = debtCreateSchema.parse(debt);
+      const { affects_wallet = true, ...rest } = debt;
+      const parsed = debtCreateSchema.parse(rest);
       const { data, error } = await supabase
         .from("debts" as any)
         .insert({
@@ -77,17 +79,19 @@ export function useCreateDebt() {
         .single();
       throwIfSupabaseError(error);
 
-      const txType = parsed.type === "borrowed" ? "income" : "expense";
-      const { error: txErr } = await supabase.from("transactions").insert({
-        user_id: user!.id,
-        wallet_id: parsed.wallet_id,
-        type: txType,
-        amount: parsed.amount,
-        category: parsed.type === "borrowed" ? "Debt Borrowed" : "Debt Lent",
-        note: `${parsed.type === "borrowed" ? "Borrowed from" : "Lent to"} ${parsed.person_name}`,
-        date: parsed.date,
-      });
-      throwIfSupabaseError(txErr);
+      if (affects_wallet) {
+        const txType = parsed.type === "borrowed" ? "income" : "expense";
+        const { error: txErr } = await supabase.from("transactions").insert({
+          user_id: user!.id,
+          wallet_id: parsed.wallet_id,
+          type: txType,
+          amount: parsed.amount,
+          category: parsed.type === "borrowed" ? "Debt Borrowed" : "Debt Lent",
+          note: `${parsed.type === "borrowed" ? "Borrowed from" : "Lent to"} ${parsed.person_name}`,
+          date: parsed.date,
+        } as any);
+        throwIfSupabaseError(txErr);
+      }
 
       return data;
     },

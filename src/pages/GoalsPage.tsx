@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { motion, AnimatePresence } from "framer-motion";
@@ -33,6 +34,9 @@ export default function GoalsPage() {
   const avgMonthlySavings = Math.max(monthIncome - monthExpense, 0);
 
   const [showCreate, setShowCreate] = useState(false);
+  const [createStep, setCreateStep] = useState<1 | 2>(1);
+  const [hasOpening, setHasOpening] = useState<null | boolean>(null);
+  const [openingBalance, setOpeningBalance] = useState("");
   const [title, setTitle] = useState("");
   const [target, setTarget] = useState("");
   const [deadline, setDeadline] = useState("");
@@ -41,30 +45,58 @@ export default function GoalsPage() {
   const [addDialog, setAddDialog] = useState<string | null>(null);
   const [addAmount, setAddAmount] = useState("");
   const [addWallet, setAddWallet] = useState("");
+  const [deductWallet, setDeductWallet] = useState(true);
   const [confetti, setConfetti] = useState<string | null>(null);
 
-  const handleCreate = async () => {
+  const resetCreate = () => {
+    setShowCreate(false);
+    setCreateStep(1);
+    setHasOpening(null);
+    setOpeningBalance("");
+    setTitle(""); setTarget(""); setDeadline(""); setEmoji("🫙");
+  };
+
+  const handleNextStep = () => {
     if (!title.trim() || !target) { toast.error("Fill in title and target amount"); return; }
+    setCreateStep(2);
+  };
+
+  const handleCreateFinal = async (withOpening: boolean) => {
+    const opening = withOpening ? parseFloat(openingBalance) : 0;
+    if (withOpening && (!opening || opening <= 0)) {
+      toast.error("Enter a valid opening balance");
+      return;
+    }
     try {
       await createGoal.mutateAsync({
         title: title.trim(),
         target_amount: parseFloat(target),
         deadline: deadline || undefined,
         emoji,
+        has_opening_balance: withOpening,
+        opening_balance: opening,
       });
       toast.success("Goal created!");
-      setShowCreate(false);
-      setTitle(""); setTarget(""); setDeadline(""); setEmoji("🫙");
+      resetCreate();
     } catch (e) { toast.error(mapSupabaseError(e)); }
   };
 
   const handleAdd = async (goalId: string) => {
     const amt = parseFloat(addAmount);
-    if (!amt || !addWallet) { toast.error("Enter amount and select wallet"); return; }
-    const w = wallets?.find((w) => w.id === addWallet);
-    if (w && Number(w.balance) < amt) { toast.error("Insufficient wallet balance"); return; }
+    if (!amt || amt <= 0) { toast.error("Enter a valid amount"); return; }
+    if (deductWallet && !addWallet) { toast.error("Please select a wallet"); return; }
+    if (deductWallet) {
+      const w = wallets?.find((w) => w.id === addWallet);
+      if (w && Number(w.balance) < amt) { toast.error("Insufficient wallet balance"); return; }
+    }
     try {
-      await addToGoal.mutateAsync({ goalId, amount: amt, walletId: addWallet, userId: user!.id });
+      await addToGoal.mutateAsync({
+        goalId,
+        amount: amt,
+        walletId: deductWallet ? addWallet : undefined,
+        userId: user!.id,
+        deductFromWallet: deductWallet,
+      });
       // Check if goal is now completed
       const goal = goals?.find((g: any) => g.id === goalId);
       if (goal && Number(goal.saved_amount) + amt >= Number(goal.target_amount)) {
@@ -72,7 +104,7 @@ export default function GoalsPage() {
         setTimeout(() => setConfetti(null), 3000);
       }
       toast.success("Funds added to goal!");
-      setAddDialog(null); setAddAmount(""); setAddWallet("");
+      setAddDialog(null); setAddAmount(""); setAddWallet(""); setDeductWallet(true);
     } catch (e) { toast.error(mapSupabaseError(e)); }
   };
 
@@ -174,7 +206,7 @@ export default function GoalsPage() {
                   <p className="text-sm font-medium text-primary flex items-center gap-1">✅ Goal completed!</p>
                 ) : (
                   <Button
-                    onClick={() => { setAddDialog(g.id); setAddWallet(wallets?.[0]?.id || ""); }}
+                    onClick={() => { setAddDialog(g.id); setAddWallet(""); setDeductWallet(true); }}
                     size="sm"
                     className="bg-accent/15 text-accent hover:bg-accent/25 border-0"
                   >
@@ -188,42 +220,91 @@ export default function GoalsPage() {
       </div>
 
       {/* Create Goal Dialog */}
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+      <Dialog open={showCreate} onOpenChange={(open) => { if (!open) resetCreate(); else setShowCreate(true); }}>
         <DialogContent className="bg-card border-border">
-          <DialogHeader><DialogTitle className="text-foreground">Create Savings Goal</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="flex gap-2 flex-wrap">
-              {EMOJIS.map((e) => (
-                <button
-                  key={e}
-                  onClick={() => setEmoji(e)}
-                  className={`text-2xl p-1 rounded-lg transition-colors ${emoji === e ? "bg-primary/20" : "hover:bg-muted"}`}
+          <DialogHeader>
+            <DialogTitle className="text-foreground">
+              {createStep === 1 ? "Create Savings Goal" : "Opening Balance"}
+            </DialogTitle>
+          </DialogHeader>
+          {createStep === 1 ? (
+            <div className="space-y-4">
+              <div className="flex gap-2 flex-wrap">
+                {EMOJIS.map((e) => (
+                  <button
+                    key={e}
+                    onClick={() => setEmoji(e)}
+                    className={`text-2xl p-1 rounded-lg transition-colors ${emoji === e ? "bg-primary/20" : "hover:bg-muted"}`}
+                  >
+                    {e}
+                  </button>
+                ))}
+              </div>
+              <div className="space-y-2">
+                <Label>Title</Label>
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Emergency Fund" className="bg-secondary border-border" />
+              </div>
+              <div className="space-y-2">
+                <Label>Target Amount</Label>
+                <Input type="number" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="50000" className="bg-secondary border-border" />
+              </div>
+              <div className="space-y-2">
+                <Label>Deadline (optional)</Label>
+                <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="bg-secondary border-border" />
+              </div>
+              <Button onClick={handleNextStep} className="w-full bg-primary text-primary-foreground">
+                Next
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-foreground">Do you have any savings already for this goal?</p>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setHasOpening(true)}
+                  className={`flex-1 ${hasOpening === true ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}
                 >
-                  {e}
-                </button>
-              ))}
+                  Yes
+                </Button>
+                <Button
+                  onClick={() => setHasOpening(false)}
+                  className={`flex-1 ${hasOpening === false ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground"}`}
+                >
+                  No
+                </Button>
+              </div>
+              {hasOpening === true && (
+                <div className="space-y-2">
+                  <Label>How much have you already saved?</Label>
+                  <Input
+                    type="number"
+                    value={openingBalance}
+                    onChange={(e) => setOpeningBalance(e.target.value)}
+                    placeholder="10000"
+                    className="bg-secondary border-border"
+                  />
+                  <p className="text-xs text-muted-foreground">This will not affect any wallet balance.</p>
+                </div>
+              )}
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => setCreateStep(1)} className="flex-1 border-border">
+                  Back
+                </Button>
+                <Button
+                  onClick={() => handleCreateFinal(hasOpening === true)}
+                  disabled={createGoal.isPending || hasOpening === null}
+                  className="flex-1 bg-primary text-primary-foreground"
+                >
+                  {createGoal.isPending ? "Creating..." : "Create Goal"}
+                </Button>
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label>Title</Label>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Emergency Fund" className="bg-secondary border-border" />
-            </div>
-            <div className="space-y-2">
-              <Label>Target Amount</Label>
-              <Input type="number" value={target} onChange={(e) => setTarget(e.target.value)} placeholder="50000" className="bg-secondary border-border" />
-            </div>
-            <div className="space-y-2">
-              <Label>Deadline (optional)</Label>
-              <Input type="date" value={deadline} onChange={(e) => setDeadline(e.target.value)} className="bg-secondary border-border" />
-            </div>
-            <Button onClick={handleCreate} disabled={createGoal.isPending} className="w-full bg-primary text-primary-foreground">
-              {createGoal.isPending ? "Creating..." : "Create Goal"}
-            </Button>
-          </div>
+          )}
         </DialogContent>
       </Dialog>
 
       {/* Add Money Dialog */}
-      <Dialog open={!!addDialog} onOpenChange={(open) => !open && setAddDialog(null)}>
+      <Dialog open={!!addDialog} onOpenChange={(open) => { if (!open) { setAddDialog(null); setAddWallet(""); setDeductWallet(true); } }}>
         <DialogContent className="bg-card border-border">
           <DialogHeader><DialogTitle className="text-foreground">Add Money to Goal</DialogTitle></DialogHeader>
           <div className="space-y-4">
@@ -231,17 +312,30 @@ export default function GoalsPage() {
               <Label>Amount</Label>
               <Input type="number" value={addAmount} onChange={(e) => setAddAmount(e.target.value)} placeholder="1000" className="bg-secondary border-border" />
             </div>
-            <div className="space-y-2">
-              <Label>From Wallet</Label>
-              <Select value={addWallet} onValueChange={setAddWallet}>
-                <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Select wallet" /></SelectTrigger>
-                <SelectContent className="bg-popover border-border">
-                  {wallets?.map((w) => (
-                    <SelectItem key={w.id} value={w.id}>{w.name} (৳{Number(w.balance).toLocaleString()})</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="flex items-center justify-between p-3 rounded-xl bg-secondary/50 border border-border/30">
+              <div className="pr-3">
+                <p className="text-sm font-medium text-foreground">Deduct from my wallet?</p>
+                <p className="text-xs text-muted-foreground">
+                  {deductWallet
+                    ? "Wallet balance will decrease"
+                    : "Use this if the money is already set aside but not tracked in your wallet"}
+                </p>
+              </div>
+              <Switch checked={deductWallet} onCheckedChange={setDeductWallet} />
             </div>
+            {deductWallet && (
+              <div className="space-y-2">
+                <Label>From Wallet</Label>
+                <Select value={addWallet} onValueChange={setAddWallet}>
+                  <SelectTrigger className="bg-secondary border-border"><SelectValue placeholder="Select wallet" /></SelectTrigger>
+                  <SelectContent className="bg-popover border-border">
+                    {wallets?.map((w) => (
+                      <SelectItem key={w.id} value={w.id}>{w.name} (৳{Number(w.balance).toLocaleString()})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <Button
               onClick={() => addDialog && handleAdd(addDialog)}
               disabled={addToGoal.isPending}

@@ -2,6 +2,7 @@ import { Link } from "react-router-dom";
 import SettingsWalletsSection from "@/components/settings/SettingsWalletsSection";
 import SettingsTransferSection from "@/components/settings/SettingsTransferSection";
 import SettingsRecurringSection from "@/components/settings/SettingsRecurringSection";
+import SettingsCategoriesSection from "@/components/settings/SettingsCategoriesSection";
 import { User, ArrowRight } from "lucide-react";
 
 export default function SettingsPage() {
@@ -10,7 +11,7 @@ export default function SettingsPage() {
       <div>
         <h2 className="text-xl font-bold tracking-tight text-foreground">Wallet Settings</h2>
         <p className="text-xs text-muted-foreground mt-1">
-          Configure your wallets, recurring transactions, and transfer funds.
+          Configure your wallets, custom categories, recurring transactions, and transfer funds.
         </p>
       </div>
 
@@ -38,6 +39,7 @@ export default function SettingsPage() {
       <SettingsWalletsSection />
       <SettingsTransferSection />
       <SettingsRecurringSection />
+      <SettingsCategoriesSection />
     </div>
   );
 }

@@ -38,6 +38,33 @@ export type Database = {
         }
         Relationships: []
       }
+      custom_categories: {
+        Row: {
+          created_at: string
+          display_order: number
+          emoji: string | null
+          id: string
+          name: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          display_order?: number
+          emoji?: string | null
+          id?: string
+          name: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          display_order?: number
+          emoji?: string | null
+          id?: string
+          name?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       debt_additions: {
         Row: {
           amount: number
@@ -295,7 +322,9 @@ export type Database = {
           created_at: string
           deadline: string | null
           emoji: string | null
+          has_opening_balance: boolean
           id: string
+          opening_balance: number
           saved_amount: number
           target_amount: number
           title: string
@@ -306,7 +335,9 @@ export type Database = {
           created_at?: string
           deadline?: string | null
           emoji?: string | null
+          has_opening_balance?: boolean
           id?: string
+          opening_balance?: number
           saved_amount?: number
           target_amount: number
           title: string
@@ -317,7 +348,9 @@ export type Database = {
           created_at?: string
           deadline?: string | null
           emoji?: string | null
+          has_opening_balance?: boolean
           id?: string
+          opening_balance?: number
           saved_amount?: number
           target_amount?: number
           title?: string

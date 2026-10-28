@@ -42,7 +42,7 @@ export function useCreateTransaction() {
       });
       const { data, error } = await supabase
         .from("transactions")
-        .insert({ ...parsed, user_id: user!.id })
+        .insert({ ...parsed, user_id: user!.id } as any)
         .select()
         .single();
       throwIfSupabaseError(error);
@@ -82,6 +82,22 @@ export function useReverseTransaction() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });
       qc.invalidateQueries({ queryKey: ["wallets"] });
+    },
+  });
+}
+
+export function useUpdateTransactionCategory() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, category }: { id: string; category: string }) => {
+      const { error } = await supabase
+        .from("transactions")
+        .update({ category: category.trim() } as any)
+        .eq("id", id);
+      throwIfSupabaseError(error);
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transactions"] });
     },
   });
 }
