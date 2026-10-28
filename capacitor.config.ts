@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from "@capacitor/cli";
 
 const config: CapacitorConfig = {
-  appId: "com.takaflow.app",
+  appId: "com.takaflow.financetracker",
   appName: "TakaFlow",
   webDir: "dist",
   server: {

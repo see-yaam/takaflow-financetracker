@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">TakaFlow</string>
     <string name="title_activity_main">TakaFlow</string>
-    <string name="package_name">com.takaflow.app</string>
-    <string name="custom_url_scheme">com.takaflow.app</string>
+    <string name="package_name">com.takaflow.financetracker</string>
+    <string name="custom_url_scheme">com.takaflow.financetracker</string>
 </resources>

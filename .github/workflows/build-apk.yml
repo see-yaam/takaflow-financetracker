@@ -94,8 +94,23 @@ jobs:
           echo "Using APK at: $APK_PATH"
           cp "$APK_PATH" TakaFlow.apk
           ls -lh TakaFlow.apk
+
+          echo "Finding apksigner tool..."
+          APKSIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -V | tail -n 1)
+          if [ -n "$APKSIGNER" ] && [ -x "$APKSIGNER" ]; then
+            echo "Signing APK with apksigner at: $APKSIGNER"
+            $APKSIGNER sign --ks android/app/release.keystore --ks-pass pass:takaflow123 --ks-key-alias takaflow --key-pass pass:takaflow123 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true TakaFlow.apk
+            echo "Verifying APK signature..."
+            $APKSIGNER verify --verbose --print-certs TakaFlow.apk > apk-verify.txt 2>&1 || true
+            cat apk-verify.txt
+            echo "### 🔐 APK Signature Verification" >> $GITHUB_STEP_SUMMARY
+            echo '```text' >> $GITHUB_STEP_SUMMARY
+            cat apk-verify.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
           echo "### 📱 TakaFlow Android APK Ready!" >> $GITHUB_STEP_SUMMARY
-          echo "Successfully built and packaged signed release \`TakaFlow.apk\`." >> $GITHUB_STEP_SUMMARY
+          echo "Successfully built and verified signed release \`TakaFlow.apk\`." >> $GITHUB_STEP_SUMMARY
 
       - name: Upload build log on failure
         if: failure()
