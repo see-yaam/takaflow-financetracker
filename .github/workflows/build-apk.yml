@@ -1,4 +1,4 @@
-name: Build & Package Android APK
+﻿name: Build & Package Android APK
 
 on:
   push:
@@ -16,6 +16,8 @@ jobs:
       VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL || 'https://rnzofkinmetxedimdbdv.supabase.co' }}
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable__RjLCxU1wzKVxL1ucoW8hg_ZMHhuYRz' }}
       VITE_SUPABASE_PROJECT_ID: ${{ secrets.VITE_SUPABASE_PROJECT_ID || 'rnzofkinmetxedimdbdv' }}
+      ANDROID_HOME: /usr/local/lib/android/sdk
+      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
 
     steps:
       - name: 📥 Checkout repository
@@ -43,8 +45,10 @@ jobs:
           java-version: 17
           cache: 'gradle'
 
-      - name: 🔄 Sync Capacitor Android Platform
-        run: npx cap sync android
+      - name: 🔄 Copy web assets into Android project
+        run: |
+          mkdir -p android/app/src/main/assets/public
+          cp -r dist/* android/app/src/main/assets/public/
 
       - name: 🔑 Make gradlew executable
         run: chmod +x android/gradlew
