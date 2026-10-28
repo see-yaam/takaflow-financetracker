@@ -1,78 +1,43 @@
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
-import { useAuth } from "@/contexts/AuthContext";
-import SignOutConfirmDialog from "@/components/SignOutConfirmDialog";
+import { Link } from "react-router-dom";
 import SettingsWalletsSection from "@/components/settings/SettingsWalletsSection";
 import SettingsTransferSection from "@/components/settings/SettingsTransferSection";
 import SettingsRecurringSection from "@/components/settings/SettingsRecurringSection";
-import SettingsAccountSection from "@/components/settings/SettingsAccountSection";
-import SettingsDangerZone from "@/components/settings/SettingsDangerZone";
-import { supabase } from "@/integrations/supabase/client";
-import { mapSupabaseError, throwIfSupabaseError } from "@/lib/supabaseErrors";
-import { toast } from "sonner";
+import { User, ArrowRight } from "lucide-react";
 
 export default function SettingsPage() {
-  const { user, signOut } = useAuth();
-  const queryClient = useQueryClient();
-
-  const [resetOpen, setResetOpen] = useState(false);
-  const [resetConfirm, setResetConfirm] = useState("");
-  const [resetting, setResetting] = useState(false);
-  const [signOutOpen, setSignOutOpen] = useState(false);
-
-  const handleResetAccount = async () => {
-    if (resetConfirm !== "RESET" || !user) return;
-    setResetting(true);
-    try {
-      const tables = [
-        "debt_additions",
-        "debt_payments",
-        "debts",
-        "monthly_snapshots",
-        "recurring_transactions",
-        "budget_goals",
-        "savings_goals",
-        "transactions",
-        "wallets",
-      ] as const;
-
-      for (const table of tables) {
-        const { error } = await supabase.from(table).delete().eq("user_id", user.id);
-        throwIfSupabaseError(error);
-      }
-
-      await queryClient.clear();
-      await signOut();
-
-      toast.success("Account reset successfully. Starting fresh!");
-      setResetOpen(false);
-      setResetConfirm("");
-      window.location.href = "/login";
-    } catch (e) {
-      toast.error(mapSupabaseError(e));
-    } finally {
-      setResetting(false);
-    }
-  };
-
   return (
     <div className="space-y-8 max-w-2xl">
-      <h2 className="text-xl font-bold tracking-tight text-foreground">Settings</h2>
+      <div>
+        <h2 className="text-xl font-bold tracking-tight text-foreground">Wallet Settings</h2>
+        <p className="text-xs text-muted-foreground mt-1">
+          Configure your wallets, recurring transactions, and transfer funds.
+        </p>
+      </div>
+
+      {/* Quick link banner to Profile */}
+      <Link
+        to="/profile"
+        className="vault-card p-4 flex items-center justify-between hover:border-primary/40 transition-all group"
+      >
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-xl bg-primary/15 text-primary flex items-center justify-center font-bold">
+            <User className="h-5 w-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-semibold text-foreground group-hover:text-primary transition-colors">
+              Vault Account & Security Profile
+            </h4>
+            <p className="text-xs text-muted-foreground">
+              Manage your avatar, change email, password, and session settings.
+            </p>
+          </div>
+        </div>
+        <ArrowRight className="h-4 w-4 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
+      </Link>
 
       <SettingsWalletsSection />
       <SettingsTransferSection />
       <SettingsRecurringSection />
-      <SettingsAccountSection onSignOutClick={() => setSignOutOpen(true)} />
-      <SettingsDangerZone
-        resetOpen={resetOpen}
-        setResetOpen={setResetOpen}
-        resetConfirm={resetConfirm}
-        setResetConfirm={setResetConfirm}
-        resetting={resetting}
-        onReset={handleResetAccount}
-      />
-
-      <SignOutConfirmDialog open={signOutOpen} onOpenChange={setSignOutOpen} onConfirm={signOut} />
     </div>
   );
 }

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">TakaFlow</string>
+    <string name="title_activity_main">TakaFlow</string>
+    <string name="package_name">com.takaflow.app</string>
+    <string name="custom_url_scheme">com.takaflow.app</string>
+</resources>

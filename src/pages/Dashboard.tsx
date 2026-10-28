@@ -53,7 +53,20 @@ export default function Dashboard() {
   }
 
   if (wallets && wallets.length === 0) {
-    return <div className="flex items-center justify-center h-64 text-muted-foreground animate-pulse">Loading...</div>;
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-6 space-y-4">
+        <div className="p-4 rounded-full bg-primary/10 text-primary">
+          <Wallet className="h-10 w-10" />
+        </div>
+        <h2 className="text-xl font-semibold">No Wallets Found</h2>
+        <p className="text-muted-foreground max-w-sm">
+          You don't have any wallets set up yet. Create a wallet to start tracking your income and expenses.
+        </p>
+        <Button onClick={() => navigate("/onboarding")} className="mt-2">
+          <Plus className="h-4 w-4 mr-2" /> Add a Wallet
+        </Button>
+      </div>
+    );
   }
 
   const totalBalance = wallets?.reduce((s, w) => {

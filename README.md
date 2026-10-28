@@ -2,6 +2,8 @@
 
 A React + Supabase app for tracking wallets, transactions, budgets, savings goals, and debts.
 
+For planned features, killer ideas, and technical development roadmap, see [ROADMAP.md](ROADMAP.md).
+
 ## Tech stack
 
 - Vite, React, TypeScript

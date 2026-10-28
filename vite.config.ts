@@ -16,6 +16,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),
+      "decimal.js-light": path.resolve(__dirname, "./node_modules/decimal.js-light/decimal.mjs"),
     },
   },
 }));

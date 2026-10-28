@@ -11,7 +11,8 @@ import { useCreateRecurring } from "@/hooks/useRecurringTransactions";
 import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { format } from "date-fns";
-import { Plus } from "lucide-react";
+import { Plus, Sparkles, ClipboardPaste } from "lucide-react";
+import { parseBangladeshFinancialSms } from "@/lib/smsParser";
 
 interface Props {
   open: boolean;
@@ -20,9 +21,32 @@ interface Props {
   defaultDate?: string;
 }
 
+const DEFAULT_EXPENSE_CATEGORIES = [
+  "Education",
+  "Entertainment",
+  "Food & Dining",
+  "Groceries",
+  "Healthcare",
+  "Other",
+  "Rent & Housing",
+  "Shopping",
+  "Transport",
+  "Utilities",
+];
+
+const DEFAULT_INCOME_CATEGORIES = [
+  "Business",
+  "Freelance",
+  "Gift",
+  "Investment",
+  "Other",
+  "Salary",
+];
+
 export default function AddTransactionDrawer({ open, onOpenChange, defaultType = "expense", defaultDate }: Props) {
   const { data: wallets } = useWallets();
-  const { data: allTransactions } = useTransactions();
+  const currentMonth = useMemo(() => format(new Date(), "yyyy-MM"), []);
+  const { data: monthTransactions } = useTransactions({ month: currentMonth });
   const createTx = useCreateTransaction();
   const createRecurring = useCreateRecurring();
   const [type, setType] = useState<"income" | "expense">(defaultType);
@@ -33,14 +57,63 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   const [date, setDate] = useState(defaultDate || format(new Date(), "yyyy-MM-dd"));
   const [recurring, setRecurring] = useState(false);
   const [categoryDropdownOpen, setCategoryDropdownOpen] = useState(false);
+  const [smsInput, setSmsInput] = useState("");
+  const [showSmsBox, setShowSmsBox] = useState(false);
   const categoryInputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const handleParseSms = (textToParse?: string) => {
+    const text = (textToParse ?? smsInput).trim();
+    if (!text) {
+      toast.error("Please paste an SMS text first");
+      return;
+    }
+    const parsed = parseBangladeshFinancialSms(text);
+    if (!parsed) {
+      toast.error("Could not find financial transaction details in this SMS");
+      return;
+    }
+    setType(parsed.type);
+    setAmount(parsed.amount.toString());
+    if (wallets && wallets.length > 0) {
+      const matched =
+        wallets.find((w) => w.name.toLowerCase().includes(parsed.source.toLowerCase())) ||
+        wallets.find((w) => parsed.source.toLowerCase().includes(w.name.toLowerCase()));
+      if (matched) {
+        setWalletId(matched.id);
+      }
+    }
+    if (parsed.categorySuggestion) {
+      setCategory(parsed.categorySuggestion);
+    }
+    const autoNote = `${parsed.source} ${parsed.merchantOrParty ? `(${parsed.merchantOrParty})` : ""} ${parsed.trxId ? `Trx: ${parsed.trxId}` : ""}`.trim();
+    setNote(autoNote);
+    setShowSmsBox(false);
+    setSmsInput("");
+    toast.success(`⚡ Parsed ${parsed.source}: ৳${parsed.amount.toLocaleString()} (${parsed.type})`);
+  };
+
+  const handleClipboardPaste = async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const clipText = await navigator.clipboard.readText();
+        if (clipText && clipText.trim()) {
+          handleParseSms(clipText);
+          return;
+        }
+      }
+      setShowSmsBox((prev) => !prev);
+    } catch {
+      setShowSmsBox((prev) => !prev);
+    }
+  };
+
   const pastCategories = useMemo(() => {
-    if (!allTransactions) return [];
-    const unique = [...new Set(allTransactions.map((t: any) => t.category))];
+    const baseSuggestions = type === "expense" ? DEFAULT_EXPENSE_CATEGORIES : DEFAULT_INCOME_CATEGORIES;
+    const recent = monthTransactions ? monthTransactions.map((t: any) => t.category).filter(Boolean) : [];
+    const unique = Array.from(new Set([...baseSuggestions, ...recent]));
     return unique.sort();
-  }, [allTransactions]);
+  }, [monthTransactions, type]);
 
   const filteredCategories = useMemo(() => {
     if (!category) return pastCategories;
@@ -116,6 +189,44 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
           <DrawerTitle className="text-foreground tracking-tight">Add Transaction</DrawerTitle>
         </DrawerHeader>
         <div className="p-4 sm:p-6 space-y-4 overflow-y-auto flex-1">
+          {/* Quick SMS Auto-Fill Banner */}
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-3 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-foreground flex items-center gap-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-primary" /> Auto-fill from bKash, Nagad or Bank SMS
+              </span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleClipboardPaste}
+                className="h-7 text-xs px-2 text-primary hover:bg-primary/10 gap-1"
+              >
+                <ClipboardPaste className="h-3 w-3" />
+                {showSmsBox ? "Close" : "Paste SMS"}
+              </Button>
+            </div>
+
+            {showSmsBox && (
+              <div className="space-y-2 pt-1">
+                <textarea
+                  value={smsInput}
+                  onChange={(e) => setSmsInput(e.target.value)}
+                  placeholder="Paste SMS here (e.g. Payment of Tk 120.00 to Shawarma House successful...)"
+                  className="w-full bg-secondary/80 border border-border rounded-lg p-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary h-20 resize-none font-mono"
+                />
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() => handleParseSms()}
+                  className="w-full h-8 text-xs bg-primary text-primary-foreground font-medium"
+                >
+                  ⚡ Parse & Auto-fill Fields
+                </Button>
+              </div>
+            )}
+          </div>
+
           {/* Type toggle */}
           <div className="flex gap-2">
             <Button

@@ -6,7 +6,14 @@ const ALLOWED_ORIGIN =
 
 function getCorsHeaders(req: Request) {
   const origin = req.headers.get("Origin");
-  const allowOrigin = origin === ALLOWED_ORIGIN ? origin : ALLOWED_ORIGIN;
+  const isAllowed =
+    !origin ||
+    origin === ALLOWED_ORIGIN ||
+    origin.startsWith("http://localhost:") ||
+    origin.startsWith("http://127.0.0.1:") ||
+    origin.endsWith(".vercel.app");
+
+  const allowOrigin = isAllowed ? (origin || ALLOWED_ORIGIN) : ALLOWED_ORIGIN;
   return {
     "Access-Control-Allow-Origin": allowOrigin,
     "Access-Control-Allow-Headers":

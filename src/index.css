@@ -60,6 +60,12 @@
     font-family: 'IBM Plex Sans', system-ui, sans-serif;
   }
 
+  /* Disable native browser password reveal eye icon (Edge / Windows) to avoid double eye */
+  input::-ms-reveal,
+  input::-ms-clear {
+    display: none;
+  }
+
   /* Tabular numbers for financial data */
   .tabular-nums {
     font-variant-numeric: tabular-nums;

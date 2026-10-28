@@ -2,32 +2,64 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
-    <title>TakaFlow — Personal Finance Vault</title>
-    <meta name="description" content="Track your personal finances across multiple wallets with TakaFlow. Manage BKash, Bank, and cash with precision.">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0" />
+    <title>TakaFlow — Personal Finance & Multi-Wallet Vault for Bangladesh</title>
+    <meta name="description" content="Take control of your money with TakaFlow. Effortlessly track bKash, Nagad, Bank accounts, and Cash in BDT. Features visual budget calendars, debt & loan manager, savings goals, and encrypted personal vault." />
+    <meta name="keywords" content="takaflow, taka tracker, personal finance bangladesh, bkash expense tracker, nagad expense manager, bdt budget tracker, debt tracking app, bangladesh money management" />
+    <meta name="author" content="TakaFlow Team" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://takaflow-financetracker.vercel.app/" />
+
+    <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
-    <!-- TODO: Set the document title to the name of your application -->
-    <title></title>
-    <meta name="description" content="" />
-    <meta name="author" content="" />
 
-    <!-- TODO: Update og:title to match your application name -->
-    
-    
+    <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/1d82b60d-061c-466b-950e-17b96f9f6882?Expires=1773656398&amp;GoogleAccessId=go-api-on-aws%40gpt-engineer-390607.iam.gserviceaccount.com&amp;Signature=W7vKe2tqc0cuci2Xc8jcL%2FHXf43RLKXac0OCsnXqOsqsoWH7YKo%2FrwT99Y7aqAybub0lokTqPrQvE5P4HMkyLbTEBOhQ0G6OOzx3lQ%2Fw56oPT4zfCK8RuUtYezjpiukf%2BnamlNdFbECQtzJwg%2FiJyySySCq1M9NtMxuvkOzfyj8wYGevfTmoYRKS%2FygAMbnLorm4Bmdq0ANtTJa4mshB4gVTFjF90Kw8Up7Ntcfhca7%2FVMw8PljhNGaJASlhBnRCUUHOI%2FfDCr9%2Beh305f%2FZIsSXXFQ576LCgTDcNyRCI17pw56DpgIM096CVPHOXelbf%2B9GuWNHNz0BC9cdcGCNqA%3D%3D">
+    <meta property="og:url" content="https://takaflow-financetracker.vercel.app/" />
+    <meta property="og:title" content="TakaFlow — Personal Finance & Multi-Wallet Vault" />
+    <meta property="og:description" content="Track your daily expenses, bKash, Nagad, Bank accounts, and Cash with zero hassle. Beautiful visual budgets and debt tracking built for Bangladesh." />
+    <meta property="og:site_name" content="TakaFlow" />
+    <meta property="og:locale" content="en_US" />
 
+    <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="" />
-    <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/attachments/og-images/1d82b60d-061c-466b-950e-17b96f9f6882?Expires=1773656398&amp;GoogleAccessId=go-api-on-aws%40gpt-engineer-390607.iam.gserviceaccount.com&amp;Signature=W7vKe2tqc0cuci2Xc8jcL%2FHXf43RLKXac0OCsnXqOsqsoWH7YKo%2FrwT99Y7aqAybub0lokTqPrQvE5P4HMkyLbTEBOhQ0G6OOzx3lQ%2Fw56oPT4zfCK8RuUtYezjpiukf%2BnamlNdFbECQtzJwg%2FiJyySySCq1M9NtMxuvkOzfyj8wYGevfTmoYRKS%2FygAMbnLorm4Bmdq0ANtTJa4mshB4gVTFjF90Kw8Up7Ntcfhca7%2FVMw8PljhNGaJASlhBnRCUUHOI%2FfDCr9%2Beh305f%2FZIsSXXFQ576LCgTDcNyRCI17pw56DpgIM096CVPHOXelbf%2B9GuWNHNz0BC9cdcGCNqA%3D%3D">
-    <meta property="og:title" content="TakaFlow — Personal Finance Vault">
-  <meta name="twitter:title" content="TakaFlow — Personal Finance Vault">
-  <meta property="og:description" content="Track your personal finances across multiple wallets with TakaFlow. Manage BKash, Bank, and cash with precision.">
-  <meta name="twitter:description" content="Track your personal finances across multiple wallets with TakaFlow. Manage BKash, Bank, and cash with precision.">
-  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
-</head>
+    <meta name="twitter:title" content="TakaFlow — Personal Finance & Multi-Wallet Vault" />
+    <meta name="twitter:description" content="Track your daily expenses, bKash, Nagad, Bank accounts, and Cash in BDT. Visual budget calendar & debt manager in one secure place." />
+
+    <!-- Theme Colors for Mobile Browsers -->
+    <meta name="theme-color" content="#0d1b14" />
+    <meta name="color-scheme" content="dark" />
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
+    <!-- Structured Data (JSON-LD) for Search Engines -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "TakaFlow",
+      "url": "https://takaflow-financetracker.vercel.app",
+      "description": "Multi-wallet personal finance and expense tracker tailored for Bangladesh. Supports bKash, Nagad, Banks, and Cash in BDT.",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "All",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "BDT"
+      },
+      "featureList": [
+        "Multi-wallet management (bKash, Nagad, Banks, Cash)",
+        "Visual budget heatmap calendar",
+        "Dhar/Karz debt & loan tracking",
+        "Savings pots and financial goals",
+        "Encrypted Row-Level Security database"
+      ]
+    }
+    </script>
+  </head>
 
   <body>
     <div id="root"></div>
