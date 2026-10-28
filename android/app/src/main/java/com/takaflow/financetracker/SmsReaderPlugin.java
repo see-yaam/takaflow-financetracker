@@ -45,4 +45,38 @@ public class SmsReaderPlugin extends Plugin {
             call.reject("Failed to read SMS: " + e.getMessage());
         }
     }
+
+    @PluginMethod
+    public void isNotificationListenerEnabled(PluginCall call) {
+        try {
+            Context context = getContext();
+            String flat = android.provider.Settings.Secure.getString(
+                context.getContentResolver(),
+                "enabled_notification_listeners"
+            );
+            boolean enabled = flat != null && flat.contains(context.getPackageName());
+            JSObject ret = new JSObject();
+            ret.put("enabled", enabled);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to check notification permission: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void openNotificationListenerSettings(PluginCall call) {
+        try {
+            Context context = getContext();
+            android.content.Intent intent = new android.content.Intent(
+                "android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS"
+            );
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            JSObject ret = new JSObject();
+            ret.put("success", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("Failed to open notification settings: " + e.getMessage());
+        }
+    }
 }

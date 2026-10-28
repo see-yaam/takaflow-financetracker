@@ -3,6 +3,7 @@ import SettingsWalletsSection from "@/components/settings/SettingsWalletsSection
 import SettingsTransferSection from "@/components/settings/SettingsTransferSection";
 import SettingsRecurringSection from "@/components/settings/SettingsRecurringSection";
 import SettingsCategoriesSection from "@/components/settings/SettingsCategoriesSection";
+import SettingsAutoTrackingSection from "@/components/settings/SettingsAutoTrackingSection";
 import { User, ArrowRight } from "lucide-react";
 
 export default function SettingsPage() {
@@ -14,6 +15,9 @@ export default function SettingsPage() {
           Configure your wallets, custom categories, recurring transactions, and transfer funds.
         </p>
       </div>
+
+      {/* Auto-tracking status and settings */}
+      <SettingsAutoTrackingSection />
 
       {/* Quick link banner to Profile */}
       <Link

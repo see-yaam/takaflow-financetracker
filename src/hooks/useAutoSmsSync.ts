@@ -12,11 +12,35 @@ interface SmsMessageItem {
   timestamp: number;
 }
 
-interface SmsReaderPluginInterface {
+export interface SmsReaderPluginInterface {
   getPendingSms(): Promise<{ messages: SmsMessageItem[] }>;
+  isNotificationListenerEnabled(): Promise<{ enabled: boolean }>;
+  openNotificationListenerSettings(): Promise<{ success: boolean }>;
 }
 
-const SmsReader = registerPlugin<SmsReaderPluginInterface>("SmsReader");
+export const SmsReader = registerPlugin<SmsReaderPluginInterface>("SmsReader");
+
+export async function checkNotificationPermission(): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) return false;
+  try {
+    const res = await SmsReader.isNotificationListenerEnabled();
+    return !!res?.enabled;
+  } catch {
+    return false;
+  }
+}
+
+export async function openNotificationSettings(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) {
+    toast.info("Auto-sync via notifications is only available on the Android app.");
+    return;
+  }
+  try {
+    await SmsReader.openNotificationListenerSettings();
+  } catch (err: any) {
+    toast.error("Could not open settings: " + (err?.message || "Unknown error"));
+  }
+}
 
 export function useAutoSmsSync() {
   const { data: wallets } = useWallets();

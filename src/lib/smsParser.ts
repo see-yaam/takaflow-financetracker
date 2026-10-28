@@ -182,18 +182,43 @@ export function parseBangladeshFinancialSms(sms: string, senderHeader?: string):
   }
 
   // 2. Determine Transaction Type (Income vs Expense)
-  const isExpense =
-    /\b(debit|debited|paid|payment|spent|purchase|withdrawn|withdraw|cash out|send money|transfer to|transferred to|deducted|fee|charge)\b/i.test(text);
+  // First, check explicit primary action phrases:
+  const primaryIncomePattern =
+    /\b(you have received|received tk|received bdt|received ৳|received from|cash in|deposit|deposited|credited by|credited with|credit of|is credited|has been credited|refund|cashback|added to)\b/i;
 
-  const isIncome =
-    /\b(credit|credited|received|cash in|deposit|deposited|refund|added to|transferred from)\b/i.test(text);
+  const primaryExpensePattern =
+    /\b(payment of|paid to|you have paid|paid tk|paid bdt|sent tk|send money to|send money of|cash out|withdrawn|withdraw|debited by|debited for|debited with|is debited|has been debited|mobile recharge|purchase at|transfer to|transferred to|deducted)\b/i;
 
-  // If it's neither an expense nor an income, it's likely marketing/spam (e.g., recharge offers, telecom spam)
-  if (!isExpense && !isIncome) {
-    return null;
+  let type: "income" | "expense";
+
+  if (primaryIncomePattern.test(text) && !primaryExpensePattern.test(text)) {
+    type = "income";
+  } else if (primaryExpensePattern.test(text) && !primaryIncomePattern.test(text)) {
+    type = "expense";
+  } else {
+    // If both or neither match the primary phrases, clean out non-determining phrases
+    // like "Fee Tk 0.00" or "Ref: Send money" before checking:
+    const strippedForType = text
+      .replace(/fee\s*(?:tk\.?|bdt|৳)?\s*0(?:\.00)?/gi, "")
+      .replace(/charge\s*(?:tk\.?|bdt|৳)?\s*0(?:\.00)?/gi, "")
+      .replace(/ref\s*:\s*[^\s.]+/gi, "");
+
+    const isIncome =
+      /\b(credit|credited|received|cash in|deposit|deposited|refund|cashback|added to|transferred from)\b/i.test(strippedForType);
+
+    const isExpense =
+      /\b(debit|debited|paid|payment|spent|purchase|withdrawn|withdraw|cash out|send money|sent|recharge|transfer to|transferred to|deducted)\b/i.test(strippedForType);
+
+    if (!isExpense && !isIncome) {
+      return null;
+    }
+
+    if (/\b(received|cash in|deposit|credited)\b/i.test(strippedForType) && !/\b(payment|paid|cash out|send money)\b/i.test(strippedForType)) {
+      type = "income";
+    } else {
+      type = isIncome && !isExpense ? "income" : "expense";
+    }
   }
-
-  const type: "income" | "expense" = isIncome && !isExpense ? "income" : "expense";
 
   // 3. Extract Amount
   // Matches: Tk 500, Tk. 500, BDT 1,200.50, ৳500, Tk500.00
@@ -241,7 +266,7 @@ export function parseBangladeshFinancialSms(sms: string, senderHeader?: string):
   // 6. Extract Merchant, Counterparty or POS location
   let merchantOrParty: string | undefined;
   const merchantMatch =
-    text.match(/(?:at|to|for|from)\s+([A-Za-z0-9\s&'.-]{3,30}?)(?:\s+successful|\s+on|\.|\s+Fee|\s+Bal|\s+Ref|\s+TrxID|\s+at|\s+via)/i);
+    text.match(/(?:at|to|for|from)\s+([A-Za-z0-9\s&'.-]{3,30}?)(?:\s+is\s+successful|\s+successful|\s+on|\.|\s+Fee|\s+Bal|\s+Ref|\s+TrxID|\s+at|\s+via)/i);
   if (merchantMatch && merchantMatch[1]) {
     const candidate = merchantMatch[1].trim();
     if (!/^(the|a|an|A\/C|card|account|your)$/i.test(candidate)) {

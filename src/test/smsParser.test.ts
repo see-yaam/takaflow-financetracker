@@ -14,14 +14,36 @@ describe("Universal Bangladesh SMS Parser", () => {
     expect(result?.categorySuggestion).toBe("Food & Dining");
   });
 
-  it("parses bKash received money (income)", () => {
-    const sms = "You have received Tk 2,500.00 from 01712345678. Ref: Freelance. TrxID 8A9B0C12 at 28/10/2026. Balance Tk 7,000.00.";
+  it("parses bKash received money (income) with Fee Tk 0.00", () => {
+    const sms = "You have received Tk 500.00 from 01711223344. Fee Tk 0.00. Balance Tk 1,500.00. TrxID 9A7BC12D at 28/10/2026 15:30.";
     const result = parseBangladeshFinancialSms(sms, "bKash");
     expect(result).not.toBeNull();
     expect(result?.source).toBe("bKash");
     expect(result?.type).toBe("income");
-    expect(result?.amount).toBe(2500.0);
-    expect(result?.balance).toBe(7000.0);
+    expect(result?.amount).toBe(500.0);
+    expect(result?.balance).toBe(1500.0);
+    expect(result?.trxId).toBe("9A7BC12D");
+  });
+
+  it("parses bKash app push notification for Send Money (expense)", () => {
+    const notif = "Send Money of Tk 500.00 to 01712345678 is successful. Fee Tk 5.00. Balance Tk 1,000.00. TrxID 8K21MN45.";
+    const result = parseBangladeshFinancialSms(notif, "bKash");
+    expect(result).not.toBeNull();
+    expect(result?.source).toBe("bKash");
+    expect(result?.type).toBe("expense");
+    expect(result?.amount).toBe(500.0);
+    expect(result?.balance).toBe(1000.0);
+    expect(result?.trxId).toBe("8K21MN45");
+  });
+
+  it("parses bKash app push notification for Mobile Recharge (expense)", () => {
+    const notif = "Mobile Recharge of Tk 50.00 to 01799887766 is successful. Balance Tk 950.00. TrxID 7B33DD99.";
+    const result = parseBangladeshFinancialSms(notif, "bKash");
+    expect(result).not.toBeNull();
+    expect(result?.source).toBe("bKash");
+    expect(result?.type).toBe("expense");
+    expect(result?.amount).toBe(50.0);
+    expect(result?.balance).toBe(950.0);
   });
 
   it("parses Nagad payment", () => {
