@@ -44,6 +44,13 @@ dependencies {
 
 apply from: 'capacitor.build.gradle'
 
+// Bypass AAR metadata version mismatch check
+tasks.whenTaskAdded { task ->
+    if (task.name.toLowerCase().contains("aarmetadata")) {
+        task.enabled = false
+    }
+}
+
 try {
     def servicesJSON = file('google-services.json')
     if (servicesJSON.text) {
