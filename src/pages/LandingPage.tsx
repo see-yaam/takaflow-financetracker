@@ -63,21 +63,22 @@ export default function LandingPage() {
             <a href="#faq" className="hover:text-foreground transition-colors">FAQ</a>
           </nav>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3">
             {user ? (
-              <Button asChild className="bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-[0_0_20px_rgba(57,255,20,0.3)]">
+              <Button asChild size="sm" className="bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-[0_0_20px_rgba(57,255,20,0.3)] text-xs sm:text-sm">
                 <Link to="/">
-                  Enter Vault <ArrowRight className="ml-1.5 h-4 w-4" />
+                  Enter Vault <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                 </Link>
               </Button>
             ) : (
               <>
-                <Button variant="ghost" asChild className="text-sm font-medium hover:text-foreground">
+                <Button variant="ghost" asChild size="sm" className="text-xs sm:text-sm font-medium hover:text-foreground px-2 sm:px-3">
                   <Link to="/login">Sign In</Link>
                 </Button>
-                <Button asChild className="bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-[0_0_20px_rgba(57,255,20,0.25)]">
+                <Button asChild size="sm" className="bg-primary text-primary-foreground font-semibold hover:bg-primary/90 shadow-[0_0_20px_rgba(57,255,20,0.25)] text-xs sm:text-sm px-2.5 sm:px-4">
                   <Link to="/signup">
-                    Get Started Free <ChevronRight className="ml-1 h-4 w-4" />
+                    <span>Get Started</span>
+                    <ChevronRight className="ml-0.5 h-3.5 w-3.5" />
                   </Link>
                 </Button>
               </>

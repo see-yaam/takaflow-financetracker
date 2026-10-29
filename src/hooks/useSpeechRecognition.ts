@@ -43,7 +43,7 @@ export function useSpeechRecognition() {
     setIsSupported(!!SpeechRecognition);
   }, []);
 
-  const startListening = useCallback((lang: "bn-BD" | "en-US" = "bn-BD") => {
+  const startListening = useCallback((lang?: string) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setError("Speech recognition is not supported in this browser.");
@@ -58,7 +58,10 @@ export function useSpeechRecognition() {
       const recognition = new SpeechRecognition();
       recognition.continuous = false;
       recognition.interimResults = true;
-      recognition.lang = lang;
+
+      // Default to "bn-BD" for accurate Bangladeshi Bangla/Banglish speech recognition,
+      // avoiding Windows OS en-US default which misinterprets Bangla speech into English syllables
+      recognition.lang = lang || "bn-BD";
 
       recognition.onstart = () => {
         setIsListening(true);

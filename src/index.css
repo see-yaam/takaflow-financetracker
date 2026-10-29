@@ -84,8 +84,7 @@
   }
 
   .text-balance-hero {
-    @apply text-5xl md:text-6xl font-bold tracking-tighter;
-    font-variant-numeric: tabular-nums;
+    @apply text-4xl sm:text-5xl md:text-6xl font-bold tracking-tight tabular-nums;
   }
 
   .wallet-label {
@@ -104,5 +103,13 @@
 
   .transaction-row:hover {
     @apply bg-foreground/5;
+  }
+
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
   }
 }

@@ -125,12 +125,12 @@ export default function GoalsPage() {
     <div className="space-y-6">
       <MonthlyBudgetCard />
 
-      <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg sm:text-xl font-bold tracking-tight text-foreground flex items-center gap-2">
           <Target className="h-5 w-5 text-accent" /> Dream Jar
         </h2>
-        <Button onClick={() => setShowCreate(true)} className="bg-primary/15 text-primary hover:bg-primary/25 border-0">
-          <Plus className="h-4 w-4 mr-2" /> New Goal
+        <Button onClick={() => setShowCreate(true)} size="sm" className="bg-primary/15 text-primary hover:bg-primary/25 border-0 text-xs sm:text-sm">
+          <Plus className="h-3.5 w-3.5 mr-1.5" /> New Goal
         </Button>
       </div>
 

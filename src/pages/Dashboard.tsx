@@ -9,7 +9,22 @@ import { useDebts } from "@/hooks/useDebts";
 import { useCurrencyRates, convertToBDT } from "@/hooks/useCurrencyRates";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
-import { Smartphone, Landmark, Wallet, Plus, TrendingUp, TrendingDown, ArrowUpDown, Undo2, Pencil, Mic } from "lucide-react";
+import {
+  Smartphone,
+  Landmark,
+  Wallet,
+  Plus,
+  TrendingUp,
+  TrendingDown,
+  ArrowUpDown,
+  Undo2,
+  Pencil,
+  Mic,
+  ShieldCheck,
+  Lock,
+  Unlock,
+  Sparkles,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
 import EditCategoryDialog from "@/components/EditCategoryDialog";
@@ -21,6 +36,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
+import { cn } from "@/lib/utils";
 
 const iconMap: Record<string, React.ElementType> = {
   smartphone: Smartphone,
@@ -42,6 +58,46 @@ export default function Dashboard() {
   const [reverseTarget, setReverseTarget] = useState<any>(null);
   const [editTarget, setEditTarget] = useState<any>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
+
+  // Hold-to-Peek Spy Privacy State
+  const [isPeeking, setIsPeeking] = useState(false);
+  const [isPrivacyLocked, setIsPrivacyLocked] = useState(() => {
+    return localStorage.getItem("takaflow_privacy_mode") !== "revealed";
+  });
+
+  const isDisguised = isPrivacyLocked && !isPeeking;
+
+  const handlePeekStart = () => {
+    if (!isPrivacyLocked) return;
+    setIsPeeking(true);
+    try {
+      if (navigator.vibrate) navigator.vibrate(15);
+    } catch {}
+  };
+
+  const handlePeekEnd = () => {
+    if (isPeeking) {
+      setIsPeeking(false);
+      try {
+        if (navigator.vibrate) navigator.vibrate(8);
+      } catch {}
+    }
+  };
+
+  const togglePrivacyLock = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = !isPrivacyLocked;
+    setIsPrivacyLocked(next);
+    localStorage.setItem("takaflow_privacy_mode", next ? "locked" : "revealed");
+    if (next) {
+      toast.success("🔒 Vault Privacy Active — Hold anywhere on card to peek!");
+    } else {
+      toast.success("👁️ Vault Unlocked — Balances are always visible");
+    }
+    try {
+      if (navigator.vibrate) navigator.vibrate([15, 40, 15]);
+    } catch {}
+  };
 
   const applyRecurring = useApplyRecurring();
   const reverseMutation = useReverseTransaction();
@@ -106,17 +162,58 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="vault-card p-8 relative overflow-hidden"
+        onMouseDown={handlePeekStart}
+        onMouseUp={handlePeekEnd}
+        onMouseLeave={handlePeekEnd}
+        onTouchStart={handlePeekStart}
+        onTouchEnd={handlePeekEnd}
+        onTouchCancel={handlePeekEnd}
+        onClick={() => {
+          setIsPrivacyLocked((prev) => {
+            const next = !prev;
+            localStorage.setItem("takaflow_privacy_mode", next ? "locked" : "revealed");
+            return next;
+          });
+        }}
+        className="vault-card p-5 sm:p-8 relative overflow-hidden select-none cursor-pointer"
       >
         <div className="currency-watermark -top-12 -right-12 rotate-[15deg] text-accent/[0.04]">৳</div>
-        <p className="wallet-label mb-2">Total Balance</p>
-        <h2 className="text-balance-hero text-foreground">
+        <div className="flex items-center justify-between mb-2">
+          <p className="wallet-label">Total Balance</p>
+          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            {isPrivacyLocked ? (
+              <span className="flex items-center gap-1 text-[11px] bg-secondary/80 px-2 py-0.5 rounded-full border border-border/40">
+                <Lock className="h-3 w-3 text-amber-500" /> Tap to reveal
+              </span>
+            ) : (
+              <span className="flex items-center gap-1 text-[11px] bg-secondary/80 px-2 py-0.5 rounded-full border border-border/40 text-primary">
+                <Unlock className="h-3 w-3" /> Visible
+              </span>
+            )}
+          </div>
+        </div>
+        <h2
+          className={cn(
+            "text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight tabular-nums text-foreground transition-all duration-300",
+            isDisguised ? "filter blur-lg select-none opacity-40" : "filter blur-0 opacity-100"
+          )}
+        >
           ৳{totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
         </h2>
       </motion.div>
 
-      {/* Wallet cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      {/* Wallet Carousel Header */}
+      <div className="flex items-center justify-between -mb-1">
+        <p className="wallet-label text-[11px] sm:text-xs font-semibold text-muted-foreground tracking-wider">
+          Wallets ({wallets?.length || 0})
+        </p>
+        <span className="text-[11px] text-muted-foreground/70 sm:hidden">
+          Swipe ➔
+        </span>
+      </div>
+
+      {/* Wallet cards: Horizontal Carousel on mobile, Grid on desktop */}
+      <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-3 overflow-x-auto sm:overflow-visible pb-2 sm:pb-0 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory no-scrollbar">
         {wallets?.map((w, i) => {
           const Icon = iconMap[w.icon || "wallet"] || Wallet;
           const currency = (w as any).currency || "BDT";
@@ -127,21 +224,37 @@ export default function Dashboard() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              className="vault-card p-5 relative overflow-hidden"
+              onMouseDown={handlePeekStart}
+              onMouseUp={handlePeekEnd}
+              onMouseLeave={handlePeekEnd}
+              onTouchStart={handlePeekStart}
+              onTouchEnd={handlePeekEnd}
+              onTouchCancel={handlePeekEnd}
+              className="vault-card p-4 sm:p-5 relative overflow-hidden select-none cursor-pointer w-[65vw] min-w-[210px] max-w-[260px] sm:w-auto sm:min-w-0 sm:max-w-none shrink-0 snap-start transition-transform active:scale-[0.98]"
             >
-              <div className="absolute top-2 right-3 text-foreground/[0.04] text-6xl font-bold pointer-events-none select-none">৳</div>
-              <div className="flex items-center gap-2 mb-3">
-                <Icon className="h-4 w-4 text-accent" />
-                <span className="wallet-label">{w.name}</span>
+              <div className="absolute top-1 right-2 text-foreground/[0.04] text-5xl font-bold pointer-events-none select-none">৳</div>
+              <div className="flex items-center gap-2 mb-2">
+                <Icon className="h-4 w-4 text-accent shrink-0" />
+                <span className="wallet-label truncate">{w.name}</span>
                 {currency !== "BDT" && (
-                  <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">{currency}</span>
+                  <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground ml-auto">{currency}</span>
                 )}
               </div>
-              <p className="text-2xl font-bold tracking-tight tabular-nums text-foreground">
+              <p
+                className={cn(
+                  "text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-foreground transition-all duration-300",
+                  isDisguised ? "filter blur-md select-none opacity-40" : "filter blur-0 opacity-100"
+                )}
+              >
                 {currency !== "BDT" ? `${currency} ` : "৳"}{Number(w.balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}
               </p>
               {currency !== "BDT" && (
-                <p className="text-xs text-muted-foreground tabular-nums mt-1">
+                <p
+                  className={cn(
+                    "text-xs text-muted-foreground tabular-nums mt-0.5 transition-all duration-300",
+                    isDisguised ? "filter blur-sm select-none opacity-40" : ""
+                  )}
+                >
                   ≈ ৳{bdtEquiv.toLocaleString("en-US", { minimumFractionDigits: 2 })}
                 </p>
               )}
@@ -178,19 +291,38 @@ export default function Dashboard() {
 
       {/* Month summary + actions */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="vault-card p-5 space-y-3">
+        <div className="vault-card p-5 space-y-3 select-none">
           <h3 className="wallet-label mb-3">This Month</h3>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2 text-sm text-muted-foreground"><TrendingUp className="h-4 w-4 text-primary" /> Income</span>
-            <span className="text-sm font-medium tabular-nums text-primary">+৳{monthIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+            <span
+              className={cn(
+                "text-sm font-medium tabular-nums text-primary transition-all duration-300",
+                isDisguised ? "filter blur-sm select-none opacity-40" : "filter blur-0 opacity-100"
+              )}
+            >
+              +৳{monthIncome.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </span>
           </div>
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-2 text-sm text-muted-foreground"><TrendingDown className="h-4 w-4 text-destructive" /> Expense</span>
-            <span className="text-sm font-medium tabular-nums text-foreground">-৳{monthExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })}</span>
+            <span
+              className={cn(
+                "text-sm font-medium tabular-nums text-foreground transition-all duration-300",
+                isDisguised ? "filter blur-sm select-none opacity-40" : "filter blur-0 opacity-100"
+              )}
+            >
+              -৳{monthExpense.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+            </span>
           </div>
           <div className="border-t border-border/30 pt-2 flex items-center justify-between">
             <span className="flex items-center gap-2 text-sm text-muted-foreground"><ArrowUpDown className="h-4 w-4" /> Net</span>
-            <span className={`text-sm font-bold tabular-nums ${net >= 0 ? "text-primary" : "text-destructive"}`}>
+            <span
+              className={cn(
+                `text-sm font-bold tabular-nums transition-all duration-300 ${net >= 0 ? "text-primary" : "text-destructive"}`,
+                isDisguised ? "filter blur-sm select-none opacity-40" : "filter blur-0 opacity-100"
+              )}
+            >
               {net >= 0 ? "+" : ""}৳{net.toLocaleString("en-US", { minimumFractionDigits: 2 })}
             </span>
           </div>
@@ -202,7 +334,7 @@ export default function Dashboard() {
             onClick={() => setVoiceOpen(true)}
             className="bg-gradient-to-r from-primary/20 via-primary/30 to-emerald-500/20 text-foreground hover:from-primary/30 hover:to-emerald-500/30 border border-primary/40 font-semibold shadow-sm"
           >
-            <Mic className="h-4 w-4 mr-2 text-primary animate-pulse" /> Voice Add (মুখে বলুন)
+            <Mic className="h-4 w-4 mr-2 text-primary" /> Voice Add
           </Button>
           <div className="grid grid-cols-2 gap-2">
             <Button onClick={() => openDrawer("income")} size="sm" className="bg-primary/15 text-primary hover:bg-primary/25 border-0">

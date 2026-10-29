@@ -221,13 +221,32 @@ export default function CalendarPage() {
       {/* Desktop: two-column layout */}
       <div className="hidden md:grid md:grid-cols-[480px_1fr] gap-6">
         <div>{calendarGrid}</div>
-        <div>{detailPanel}</div>
+        <div>
+          {selectedDate ? (
+            detailPanel
+          ) : (
+            <div className="vault-card p-8 text-center h-full min-h-[300px] flex flex-col items-center justify-center">
+              <p className="text-sm font-semibold text-foreground">No Date Selected</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Click any day on the calendar to inspect its transactions or add a new one.
+              </p>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Mobile: stacked layout */}
-      <div className="md:hidden space-y-6">
+      <div className="md:hidden space-y-4">
         {calendarGrid}
-        {detailPanel}
+        {selectedDate ? (
+          detailPanel
+        ) : (
+          <div className="vault-card p-4 text-center">
+            <p className="text-xs text-muted-foreground">
+              📅 Tap any day on the calendar to view its transactions or add a new entry.
+            </p>
+          </div>
+        )}
       </div>
 
       <AddTransactionDrawer

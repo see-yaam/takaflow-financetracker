@@ -134,14 +134,16 @@ jobs:
         if: github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.3
-          name: "TakaFlow v1.0.3 (Bangla/Banglish Voice Assistant & Auto-Tracking)"
+          tag_name: v1.0.4
+          name: "TakaFlow v1.0.4 (Brand New App Icon, Mobile Carousel & AI Voice Assistant)"
           body: |
-            ### 📱 TakaFlow Android v1.0.3
-            - **🎙️ Voice Expense & Income Assistant**: Speak naturally in Bangla or Banglish (e.g. "৪০০ টাকা রেস্টুরেন্টে খরচ" or "500 taka sesh ghurte giye") to record transactions with 1-tap confirmation.
-            - **Notification Listener Service**: Captures bKash, Nagad, and bank app notifications.
+            ### 📱 TakaFlow Android v1.0.4
+            - **🎨 Brand New App Icon**: Official emerald green and neon Bengali `৳` launcher icon.
+            - **🔄 Mobile Horizontal Wallet Carousel**: Compact, frictionless swipeable wallets on home dashboard.
+            - **🎙️ AI Voice Assistant Upgrade**: Smart colloquial Bangla/Banglish speech parsing with silent Gemini AI fallback.
+            - **🛡️ Anti-Scam Protection Shield**: Local-only automated SMS and notification financial tracking.
             - **Direct Download**:
-              - **[Download TakaFlow.apk](https://github.com/see-yaam/takaflow-financetracker/releases/download/v1.0.3/TakaFlow.apk)**
+              - **[Download TakaFlow.apk](https://github.com/see-yaam/takaflow-financetracker/releases/download/v1.0.4/TakaFlow.apk)**
           files: TakaFlow.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

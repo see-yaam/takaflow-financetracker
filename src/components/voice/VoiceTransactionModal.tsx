@@ -1,14 +1,16 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Mic, MicOff, Check, X, RotateCcw, Sparkles, ArrowDownLeft, ArrowUpRight, Globe } from "lucide-react";
+import { Mic, MicOff, Check, X, RotateCcw, Sparkles, ArrowDownLeft, ArrowUpRight } from "lucide-react";
 import { useSpeechRecognition } from "@/hooks/useSpeechRecognition";
-import { parseVoiceInput, ParsedVoiceTransaction } from "@/lib/voiceParser";
+import { parseVoiceInput, ParsedVoiceTransaction, guessCategoryEmoji } from "@/lib/voiceParser";
+import { parseVoiceWithAi } from "@/lib/aiVoiceParser";
 import { useWallets } from "@/hooks/useWallets";
 import { useCreateTransaction } from "@/hooks/useTransactions";
+import { useCustomCategories, useCreateCustomCategory } from "@/hooks/useCustomCategories";
 import CategoryPicker from "@/components/CategoryPicker";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -20,6 +22,8 @@ interface Props {
 
 export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
   const { data: wallets } = useWallets();
+  const { data: customCategories } = useCustomCategories();
+  const createCustomCategory = useCreateCustomCategory();
   const createTx = useCreateTransaction();
   const {
     isListening,
@@ -31,7 +35,6 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
     resetTranscript,
   } = useSpeechRecognition();
 
-  const [lang, setLang] = useState<"bn-BD" | "en-US">("bn-BD");
   const [parsed, setParsed] = useState<ParsedVoiceTransaction | null>(null);
 
   // Editable transaction form state
@@ -41,6 +44,7 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
   const [walletId, setWalletId] = useState("");
   const [note, setNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isAiParsing, setIsAiParsing] = useState(false);
 
   // Set default wallet when available
   useEffect(() => {
@@ -49,37 +53,93 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
     }
   }, [wallets, walletId]);
 
-  // When modal opens, auto-start speech recognition
+  // When modal opens, auto-start speech recognition (auto language detection)
   useEffect(() => {
     if (open) {
       setParsed(null);
+      setIsAiParsing(false);
       resetTranscript();
       if (isSupported) {
-        startListening(lang);
+        startListening();
       }
     } else {
       stopListening();
     }
-  }, [open, lang, isSupported]);
+  }, [open, isSupported]);
 
-  // When speech stops and transcript exists, parse it
+  // When speech stops and transcript exists, parse it with existing categories
   useEffect(() => {
     if (!isListening && transcript.trim().length > 0) {
-      const result = parseVoiceInput(transcript);
+      const existingCatNames = (customCategories || []).map((c) => c.name);
+      const result = parseVoiceInput(transcript, existingCatNames);
+
+      const applyParsedData = (res: ParsedVoiceTransaction) => {
+        setParsed(res);
+        setType(res.type);
+        setAmount(res.amount.toString());
+        setCategory(res.category);
+        setNote(res.note);
+
+        // Auto-select detected wallet if mentioned (e.g. bKash, Cash, Nagad, Bank, Pocket)
+        if (res.detectedWallet && wallets && wallets.length > 0) {
+          const target = res.detectedWallet.toLowerCase();
+          const isCashLike = target === "cash" || target === "pocket";
+          const matched =
+            wallets.find((w) => w.name.toLowerCase().includes(target)) ||
+            wallets.find((w) => target.includes(w.name.toLowerCase())) ||
+            (isCashLike
+              ? wallets.find((w) => {
+                  const n = w.name.toLowerCase();
+                  return (
+                    n.includes("cash") ||
+                    n.includes("pocket") ||
+                    n.includes("পকেট") ||
+                    n.includes("ক্যাশ") ||
+                    n.includes("নগদ") ||
+                    n.includes("মানিব্যাগ") ||
+                    n.includes("wallet")
+                  );
+                })
+              : undefined);
+          if (matched) {
+            setWalletId(matched.id);
+          }
+        }
+      };
+
       if (result) {
-        setParsed(result);
-        setType(result.type);
-        setAmount(result.amount.toString());
-        setCategory(result.category);
-        setNote(result.note);
+        applyParsedData(result);
+      } else {
+        // Local regex parsing could not extract amount or intent -> Silent AI Fallback!
+        setIsAiParsing(true);
+        parseVoiceWithAi(transcript, existingCatNames, (wallets || []).map((w) => w.name))
+          .then((aiResult) => {
+            if (aiResult) {
+              applyParsedData(aiResult);
+            }
+          })
+          .catch((err) => {
+            console.warn("AI parse fallback error:", err);
+          })
+          .finally(() => {
+            setIsAiParsing(false);
+          });
       }
     }
-  }, [isListening, transcript]);
+  }, [isListening, transcript, wallets, customCategories]);
+
+  // Check if detected category is new (not in user custom categories or defaults)
+  const isNewCategory = useMemo(() => {
+    if (!category || category === "Other" || category === "General Expense" || category === "Income") return false;
+    const existingNames = (customCategories || []).map((c) => c.name.toLowerCase());
+    return !existingNames.includes(category.trim().toLowerCase());
+  }, [category, customCategories]);
 
   const handleStartAgain = () => {
     setParsed(null);
+    setIsAiParsing(false);
     resetTranscript();
-    startListening(lang);
+    startListening();
   };
 
   const handleSave = async () => {
@@ -94,17 +154,38 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
 
     setIsSaving(true);
     try {
+      const finalCategory = category.trim() || (type === "expense" ? "General Expense" : "Income");
+
+      // Auto-build custom category instantly if it doesn't already exist!
+      const existingNames = (customCategories || []).map((c) => c.name.toLowerCase());
+      if (
+        finalCategory &&
+        finalCategory !== "Other" &&
+        finalCategory !== "General Expense" &&
+        finalCategory !== "Income" &&
+        !existingNames.includes(finalCategory.toLowerCase())
+      ) {
+        try {
+          await createCustomCategory.mutateAsync({
+            name: finalCategory,
+            emoji: guessCategoryEmoji(finalCategory),
+          });
+        } catch (catErr) {
+          console.warn("Could not auto-create custom category:", catErr);
+        }
+      }
+
       await createTx.mutateAsync({
         wallet_id: walletId || (wallets ? wallets[0].id : ""),
         type,
         amount: num,
-        category: category || "Other",
+        category: finalCategory,
         note: note || (type === "expense" ? "Voice expense" : "Voice income"),
         date: format(new Date(), "yyyy-MM-dd"),
       });
 
       toast.success(
-        `⚡ Recorded ${category}: ৳${num.toLocaleString()} (${type === "expense" ? "Expense" : "Income"})!`,
+        `⚡ Recorded ${finalCategory}: ৳${num.toLocaleString()} (${type === "expense" ? "Expense" : "Income"})!`,
         { duration: 4000 }
       );
       onOpenChange(false);
@@ -118,28 +199,14 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md p-6 bg-card/95 backdrop-blur-xl border-border/60 shadow-2xl rounded-2xl">
-        <DialogHeader className="flex flex-row items-center justify-between pb-2 border-b border-border/40">
+        <DialogHeader className="pb-2 border-b border-border/40">
           <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
             <Sparkles className="h-4 w-4 text-primary" />
             Voice Transaction Assistant
           </DialogTitle>
-          <div className="flex items-center gap-1.5 bg-secondary/80 px-2 py-1 rounded-lg text-xs">
-            <Globe className="h-3.5 w-3.5 text-muted-foreground" />
-            <button
-              type="button"
-              onClick={() => {
-                const nextLang = lang === "bn-BD" ? "en-US" : "bn-BD";
-                setLang(nextLang);
-                if (isListening) {
-                  stopListening();
-                  startListening(nextLang);
-                }
-              }}
-              className="text-[11px] font-medium text-foreground hover:text-primary transition-colors"
-            >
-              {lang === "bn-BD" ? "বাংলা / বাংলিশ" : "English"}
-            </button>
-          </div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            মুখে বলুন (বাংলা, বাংলিশ বা ইংলিশ) — অটো ক্যাটাগরি তৈরি হবে
+          </p>
         </DialogHeader>
 
         <div className="space-y-5 py-2">
@@ -243,7 +310,14 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
               <div className="grid grid-cols-2 gap-2.5">
                 {/* Category Picker */}
                 <div>
-                  <Label className="text-xs text-muted-foreground mb-1 block">Category</Label>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label className="text-xs text-muted-foreground block">Category</Label>
+                    {isNewCategory && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-emerald-500 bg-emerald-500/10 px-1.5 py-0.5 rounded animate-pulse">
+                        <Sparkles className="w-2.5 h-2.5" /> Auto-built
+                      </span>
+                    )}
+                  </div>
                   <CategoryPicker value={category} onChange={setCategory} />
                 </div>
 
@@ -298,6 +372,13 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
                   {isSaving ? "Saving..." : "Confirm & Save"}
                 </Button>
               </div>
+            </div>
+          ) : isAiParsing ? (
+            <div className="text-center py-4 space-y-2">
+              <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+              <p className="text-xs text-muted-foreground font-medium">
+                প্রসেস করা হচ্ছে...
+              </p>
             </div>
           ) : (
             !isListening && transcript.trim().length > 0 && (

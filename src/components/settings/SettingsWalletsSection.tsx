@@ -130,40 +130,43 @@ export default function SettingsWalletsSection() {
         </DialogContent>
       </Dialog>
 
-      <div className="flex gap-2 mt-4">
+      <div className="space-y-2 sm:space-y-0 sm:flex sm:gap-2 mt-4">
         <Input
           value={newWalletName}
           onChange={(e) => setNewWalletName(e.target.value)}
-          placeholder="Wallet name"
-          className="bg-secondary border-border"
+          placeholder="Wallet name (e.g. bKash)"
+          className="bg-secondary border-border flex-1 min-w-0"
         />
-        <Input
-          type="number"
-          value={newWalletBalance}
-          onChange={(e) => setNewWalletBalance(e.target.value)}
-          placeholder="Balance"
-          className="bg-secondary border-border w-28"
-        />
-        <Select value={newWalletCurrency} onValueChange={setNewWalletCurrency}>
-          <SelectTrigger className="bg-secondary border-border w-20">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent className="bg-popover border-border">
-            {CURRENCIES.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Button
-          onClick={handleAddWallet}
-          disabled={createWallet.isPending}
-          size="icon"
-          className="bg-primary text-primary-foreground shrink-0"
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            value={newWalletBalance}
+            onChange={(e) => setNewWalletBalance(e.target.value)}
+            placeholder="Balance"
+            className="bg-secondary border-border flex-1 sm:w-28"
+          />
+          <Select value={newWalletCurrency} onValueChange={setNewWalletCurrency}>
+            <SelectTrigger className="bg-secondary border-border w-20">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-popover border-border">
+              {CURRENCIES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button
+            onClick={handleAddWallet}
+            disabled={createWallet.isPending || !newWalletName.trim()}
+            size="icon"
+            className="bg-primary text-primary-foreground shrink-0"
+            title="Add wallet"
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -17,12 +17,11 @@ const navItems = [
 ];
 
 const mobileNavItems = [
-  { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/dashboard", icon: LayoutDashboard, label: "Home" },
   { to: "/calendar", icon: Calendar, label: "Calendar" },
+  { to: "/reports", icon: BarChart3, label: "Reports" },
   { to: "/goals", icon: Target, label: "Goals" },
   { to: "/debts", icon: Handshake, label: "Debts" },
-  { to: "/settings", icon: Wallet, label: "Wallet Settings" },
-  { to: "/profile", icon: User, label: "Profile" },
 ];
 
 export default function AppLayout() {
@@ -35,7 +34,63 @@ export default function AppLayout() {
   useAutoSmsSync();
 
   return (
-    <div className="flex min-h-screen bg-background">
+    <div className="flex flex-col md:flex-row min-h-screen bg-background">
+      {/* Mobile Top Header */}
+      <header className="md:hidden sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border/50 px-4 h-14 flex items-center justify-between">
+        <Link to="/dashboard" className="flex items-center gap-2">
+          <span className="h-7 w-7 rounded-lg bg-primary/20 text-primary font-bold flex items-center justify-center text-sm shadow-[0_0_10px_rgba(57,255,20,0.2)]">
+            ৳
+          </span>
+          <span className="font-bold text-base tracking-tight text-foreground flex items-center gap-1.5">
+            TakaFlow
+            <span className="text-[9px] uppercase font-mono tracking-wider px-1 py-0.2 rounded bg-primary/15 text-primary border border-primary/20">
+              Vault
+            </span>
+          </span>
+        </Link>
+
+        <div className="flex items-center gap-1.5">
+          <Link
+            to="/settings"
+            className={cn(
+              "p-2 rounded-xl transition-colors",
+              pathname === "/settings"
+                ? "text-primary bg-primary/15 font-semibold"
+                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+            )}
+            title="Wallet Settings"
+            aria-label="Wallet Settings"
+          >
+            <Wallet className="h-4.5 w-4.5" />
+          </Link>
+          {user && (
+            <Link
+              to="/profile"
+              className={cn(
+                "p-0.5 rounded-full border transition-all",
+                pathname === "/profile"
+                  ? "border-primary ring-2 ring-primary/25"
+                  : "border-border/60 hover:border-primary/40"
+              )}
+              title="Account Profile"
+              aria-label="Account Profile"
+            >
+              {user.user_metadata?.avatar_url ? (
+                <img
+                  src={user.user_metadata.avatar_url}
+                  alt="Profile"
+                  className="h-7 w-7 rounded-full object-cover"
+                />
+              ) : (
+                <div className="h-7 w-7 rounded-full bg-primary/20 text-primary font-bold flex items-center justify-center text-xs">
+                  {(user.user_metadata?.full_name?.[0] || user.email?.[0] || "U").toUpperCase()}
+                </div>
+              )}
+            </Link>
+          )}
+        </div>
+      </header>
+
       {/* Desktop sidebar */}
       <aside className="hidden md:flex flex-col w-64 h-screen sticky top-0 bg-secondary/50 border-r border-border p-4">
         {/* Top Scrollable Navigation Section */}
@@ -112,8 +167,8 @@ export default function AppLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col min-h-screen pb-20 md:pb-0">
-        <div className="flex-1 p-4 md:p-8 max-w-6xl w-full mx-auto">
+      <main className="flex-1 flex flex-col min-h-screen pb-28 md:pb-0">
+        <div className="flex-1 p-3.5 sm:p-4 md:p-8 max-w-6xl w-full mx-auto">
           <Outlet />
         </div>
       </main>
@@ -125,8 +180,10 @@ export default function AppLayout() {
             key={item.to}
             to={item.to}
             className={cn(
-              "flex flex-col items-center gap-1 px-2 py-1.5 text-[10px] transition-colors",
-              pathname === item.to ? "text-primary" : "text-muted-foreground"
+              "flex flex-col items-center gap-1 px-3 py-1 text-[11px] font-medium transition-colors",
+              pathname === item.to
+                ? "text-primary font-semibold"
+                : "text-muted-foreground hover:text-foreground"
             )}
           >
             <item.icon className="h-5 w-5" />
@@ -140,8 +197,8 @@ export default function AppLayout() {
         type="button"
         onClick={() => setVoiceOpen(true)}
         className="fixed bottom-20 right-4 md:bottom-8 md:right-8 z-40 h-13 w-13 rounded-full bg-gradient-to-tr from-primary to-emerald-500 text-primary-foreground shadow-xl shadow-primary/25 flex items-center justify-center hover:scale-105 active:scale-95 transition-all p-3 border-2 border-background/80 group"
-        title="Voice Expense Assistant (মুখে বলুন)"
-        aria-label="Voice Expense Assistant"
+        title="Voice Assistant"
+        aria-label="Voice Assistant"
       >
         <Mic className="h-6 w-6 group-hover:scale-110 transition-transform" />
       </button>

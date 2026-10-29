@@ -96,8 +96,8 @@ export default function Login() {
 
           {/* Password Field */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <Label htmlFor="login-password" className="text-xs font-semibold flex items-center gap-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <Label htmlFor="login-password" className="text-xs font-semibold flex items-center gap-1.5 shrink-0">
                 <Lock className="h-3.5 w-3.5 text-primary" /> Password
               </Label>
               <Link

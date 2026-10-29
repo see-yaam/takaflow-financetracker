@@ -301,26 +301,28 @@ export default function Reports() {
 
       {/* Filtered transaction list */}
       <div className="vault-card p-4 md:p-5 overflow-hidden">
-        <div className="flex flex-wrap items-center gap-3 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <h3 className="wallet-label">Transactions</h3>
-          <Select value={filterWallet} onValueChange={setFilterWallet}>
-            <SelectTrigger className="w-full md:w-32 bg-secondary border-border min-h-[48px] md:min-h-[32px] text-sm md:text-xs">
-              <SelectValue placeholder="Wallet" />
-            </SelectTrigger>
-            <SelectContent className="bg-popover border-border">
-              <SelectItem value="all">All Wallets</SelectItem>
-              {wallets?.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-full md:w-32 bg-secondary border-border min-h-[48px] md:min-h-[32px] text-sm md:text-xs">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent className="bg-popover border-border">
-              <SelectItem value="all">All Categories</SelectItem>
-              {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-            </SelectContent>
-          </Select>
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2 w-full sm:w-auto">
+            <Select value={filterWallet} onValueChange={setFilterWallet}>
+              <SelectTrigger className="w-full sm:w-32 bg-secondary border-border min-h-[40px] md:min-h-[32px] text-xs">
+                <SelectValue placeholder="Wallet" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border-border">
+                <SelectItem value="all">All Wallets</SelectItem>
+                {wallets?.map((w) => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-full sm:w-32 bg-secondary border-border min-h-[40px] md:min-h-[32px] text-xs">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent className="bg-popover border-border">
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
         {!transactions?.length ? (
           <p className="text-sm text-muted-foreground">No transactions found.</p>
