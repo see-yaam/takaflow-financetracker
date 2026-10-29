@@ -29,6 +29,7 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
     isListening,
     transcript,
     setTranscript,
+    error,
     isSupported,
     startListening,
     stopListening,
@@ -243,6 +244,17 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
                 ? "কথা বলা শেষ হয়েছে। নিচে কনফার্ম করুন:"
                 : "মাইক্রোফোনে ট্যাপ করে কথা বলুন"}
             </p>
+
+            {error && (
+              <div className="mt-3 p-3 rounded-xl bg-destructive/15 border border-destructive/30 text-center max-w-xs">
+                <p className="text-xs text-destructive font-medium">
+                  {error}
+                </p>
+                <p className="text-[11px] text-muted-foreground mt-1.5">
+                  💡 ফোনের <b>Settings &gt; Apps &gt; TakaFlow &gt; Permissions</b> থেকে <b>Microphone</b> চালু করুন।
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Live Transcript Bubble */}

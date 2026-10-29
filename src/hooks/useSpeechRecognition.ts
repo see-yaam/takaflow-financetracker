@@ -43,11 +43,26 @@ export function useSpeechRecognition() {
     setIsSupported(!!SpeechRecognition);
   }, []);
 
-  const startListening = useCallback((lang?: string) => {
+  const startListening = useCallback(async (lang?: string) => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
       setError("Speech recognition is not supported in this browser.");
       return;
+    }
+
+    // 1. Explicitly request microphone stream to trigger Android / Browser system permission popup
+    if (typeof navigator !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        // Immediately release tracks once permission is granted
+        stream.getTracks().forEach((track) => track.stop());
+      } catch (micErr: any) {
+        console.warn("Microphone access error:", micErr);
+        if (micErr.name === "NotAllowedError" || micErr.name === "PermissionDeniedError") {
+          setError("Microphone permission was denied. Please allow microphone access in phone settings.");
+          return;
+        }
+      }
     }
 
     try {
@@ -78,7 +93,9 @@ export function useSpeechRecognition() {
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
         console.warn("Speech recognition error:", event.error);
-        if (event.error !== "no-speech") {
+        if (event.error === "not-allowed") {
+          setError("Microphone permission was denied. Please allow microphone access in phone settings.");
+        } else if (event.error !== "no-speech") {
           setError(`Speech error: ${event.error}`);
         }
         setIsListening(false);
