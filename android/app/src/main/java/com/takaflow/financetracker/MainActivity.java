@@ -13,6 +13,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(SmsReaderPlugin.class);
+        registerPlugin(AppUpdaterPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Prompt user for RECORD_AUDIO permission at runtime

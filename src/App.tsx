@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import AppLayout from "@/components/AppLayout";
+import UpdateCheckerModal from "@/components/UpdateCheckerModal";
 
 const LandingPage = lazy(() => import("@/pages/LandingPage"));
 const Login = lazy(() => import("@/pages/Login"));
@@ -48,6 +49,7 @@ const App = () => {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Sonner />
+        <UpdateCheckerModal />
         <AuthProvider>
           <BrowserRouter>
             <ErrorBoundary>

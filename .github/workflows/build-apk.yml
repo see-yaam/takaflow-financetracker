@@ -134,16 +134,15 @@ jobs:
         if: github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.5
-          name: "TakaFlow v1.0.5 (Microphone Permission & Launcher Icon Fix)"
+          tag_name: v1.0.6
+          name: "TakaFlow v1.0.6 (In-App Auto Update & Native Downloader)"
           body: |
-            ### 📱 TakaFlow Android v1.0.5
-            - **🎙️ Microphone Runtime Permission**: Added RECORD_AUDIO system permission and auto-prompt so voice assistant opens without being blocked.
-            - **🎨 Official Launcher Icons**: Brand new emerald and neon Bengali `৳` launcher icon.
-            - **🔄 Mobile Horizontal Wallet Carousel**: Smooth horizontal swipe cards on mobile dashboard.
-            - **🛡️ Anti-Scam Protection Shield**: Automated SMS and notification transaction tracking.
+            ### 📱 TakaFlow Android v1.0.6
+            - **🔄 In-App Auto Update**: No need to manually visit GitHub! The app detects new releases on startup, downloads the update in background, and prompts 1-tap installation.
+            - **🎙️ Microphone Runtime Permission**: Built-in voice assistant with automatic RECORD_AUDIO permissions.
+            - **🎨 Official Brand Icon**: High-definition emerald green and neon Bengali `৳` launcher icon.
             - **Direct Download**:
-              - **[Download TakaFlow.apk](https://github.com/see-yaam/takaflow-financetracker/releases/download/v1.0.5/TakaFlow.apk)**
+              - **[Download TakaFlow.apk](https://github.com/see-yaam/takaflow-financetracker/releases/download/v1.0.6/TakaFlow.apk)**
           files: TakaFlow.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
