@@ -142,10 +142,11 @@ const EXPENSE_INTENT_WORDS = [
 
 // Income intent keywords
 const INCOME_INTENT_WORDS = [
-  "পেলাম", "আসলো", "ঢুকলো", "পাইছি", "দিছে", "জমা", "বেতন", "টিউশনি", "লাভ", "ইনকাম",
-  "আয়", "বোনাস", "ক্যাশব্যাক", "ফেরত", "উঠাইলাম",
-  "pelam", "ashlo", "dhuklo", "paisi", "diche", "joma", "beton", "salary", "bonus",
-  "income", "received", "got", "credited", "cashback", "refund"
+  "পেলাম", "আসলো", "ঢুকলো", "পাইছি", "পাইসি", "পেয়েছি", "পেয়েছি", "দিছে", "দিয়েছে", "দিয়েছে", "জমা",
+  "বেতন", "স্যালারি", "টিউশনি", "লাভ", "ইনকাম", "আয়", "আয়", "বোনাস", "ক্যাশব্যাক", "ফেরত", "উঠাইলাম",
+  "উপহার", "সালামি",
+  "pelam", "ashlo", "dhuklo", "paisi", "paici", "peyechi", "diche", "joma", "beton", "salary",
+  "bonus", "income", "received", "got", "credited", "cashback", "refund", "salami", "profit"
 ];
 
 // Wallet keywords mapping for Bangladeshi users
@@ -755,29 +756,53 @@ function extractType(text: string): "income" | "expense" {
 }
 
 /**
- * Creates a clean note from speech
+ * Creates a clean, human-readable note from spoken speech
  */
-function extractNote(text: string, category: string, amount: number | null, detectedWallet?: string): string {
-  // Strip out amount digits and words like "taka"
-  let clean = text
-    .replace(/[০-৯0-9]+/g, "")
-    .replace(/(?:taka|টাকা|tk|bdt|৳)/gi, "")
+function extractNote(
+  text: string,
+  category: string,
+  amount: number | null,
+  detectedWallet?: string,
+  type?: "income" | "expense"
+): string {
+  let clean = text;
+
+  // 1. Remove currency symbols and numbers with optional trailing suffixes (e.g. "400 টাকার", "৳1,00,000", "500 taka")
+  clean = clean
+    .replace(/(?:৳|tk\.?|bdt|টাকা|টাকায়|টাকায়|টাকার|taka|takar)?\s*[০-৯0-9,]+(?:\.[০-৯0-9]+)?\s*(?:টাকার|টাকায়|টাকায়|টাকা|taka|takar|tk\.?|bdt|৳)?/gi, " ")
+    .replace(/[০-৯0-9]+/g, " ");
+
+  // 2. Remove all mentions of wallets with their inflected locative cases (e.g. বিকাশে, ব্যাংকে, পকেটে, ক্যাশে)
+  clean = clean.replace(
+    /(?:বিকাশ(?:ে|ের|টায়|টা| এ)?|নগদ(?:ে|ের)?|রকেট(?:ে|ের)?|ব্যাংক(?:ে|ের)?|ক্যাশ(?:ে|ের)?|পকেট(?:ে|ের)?|মানিব্যাগ(?:ে|ের)?|bkash|nagad|rocket|bank|cash|pocket|wallet)(?:\s*(?:থেকে|theke|diye|দিয়ে|দিয়ে|এ|e))?/gi,
+    " "
+  );
+
+  // 3. Remove standalone prepositions left behind
+  clean = clean.replace(/\b(?:theke|diye|e|থেকে|দিয়ে|দিয়ে|দারা|দ্বারা)\b/gi, " ");
+
+  // 4. If transaction is Income, remove leading redundant intent words (e.g. "ইনকাম ঈদ বোনাস" -> "ঈদ বোনাস")
+  if (type === "income") {
+    clean = clean.replace(/^(?:\s*ইনকাম|\s*আয়|\s*আয়|\s*income)\s+/i, " ");
+  }
+
+  // 5. Remove any leftover commas, punctuation, and orphaned Bengali vowel signs/diacritics
+  clean = clean
+    .replace(/(?:^|\s)[\u0981-\u0983\u09BC-\u09CD\u09D7\u09E2\u09E3]+/g, " ")
+    // Remove isolated single-letter Bengali genitives or prepositions left dangling (e.g. "র ", "এর ")
+    .replace(/(?:^|\s)(?:র|এর|ো|ে)(?:\s|$)/g, " ")
+    // Clean all punctuation from beginning and end
+    .replace(/^[\s,।.?!:;'"()[\]{}/_\-]+|[\s,।.?!:;'"()[\]{}/_\-]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
-  // If a wallet was explicitly mentioned, clean out the wallet word and prepositions (theke, e, থেকে, দিয়ে)
-  if (detectedWallet) {
-    clean = clean
-      .replace(new RegExp(`(?:theke|diye|e|থেকে|দিয়ে|দিয়ে)?\\s*${detectedWallet}\\s*(?:theke|diye|e|থেকে|দিয়ে|দিয়ে)?`, "gi"), "")
-      .replace(/(?:বিকাশ|বিকাশে|নগদ|নগদে|রকেট|রকেটে|ক্যাশ|ক্যাশে|ব্যাংক|ব্যাংকে|পকেট|পকেটে|মানিব্যাগ|মানিব্যাগে|pocket|wallet)(?:\s*(?:থেকে|theke|diye|দিয়ে|দিয়ে))?/gi, "")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  // If text is too short, default to category name
-  if (clean.length < 3) {
+  // If text is too short or empty, default to category name
+  if (clean.length < 2) {
     return category;
   }
+
+  // Clean trailing punctuation again if any remains
+  clean = clean.replace(/[\s,।.?!:;'"()[\]{}/_\-]+$/g, "").trim();
 
   // Capitalize first letter
   return clean.charAt(0).toUpperCase() + clean.slice(1);
@@ -803,7 +828,7 @@ export function parseVoiceInput(
   const type = extractType(text);
   const detectedWallet = extractWallet(text);
   const category = extractCategory(text, type, existingCategories, detectedWallet);
-  const note = extractNote(text, category, amount, detectedWallet);
+  const note = extractNote(text, category, amount, detectedWallet, type);
 
   return {
     amount,

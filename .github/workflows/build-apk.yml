@@ -134,15 +134,16 @@ jobs:
         if: github.ref == 'refs/heads/main' && success()
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.6
-          name: "TakaFlow v1.0.6 (In-App Auto Update & Native Downloader)"
+          tag_name: v1.0.7
+          name: "TakaFlow v1.0.7 (Offline Sync, Walkie-Talkie Voice Mic, Profile Cropper)"
           body: |
-            ### 📱 TakaFlow Android v1.0.6
-            - **🔄 In-App Auto Update**: No need to manually visit GitHub! The app detects new releases on startup, downloads the update in background, and prompts 1-tap installation.
-            - **🎙️ Microphone Runtime Permission**: Built-in voice assistant with automatic RECORD_AUDIO permissions.
-            - **🎨 Official Brand Icon**: High-definition emerald green and neon Bengali `৳` launcher icon.
+            ### 📱 TakaFlow Android v1.0.7
+            - **⚡ Complete Offline-First Two-Way Sync**: Use TakaFlow without internet permanently with TanStack Query permanent caching and local Outbox Queue. Auto-syncs to cloud when connected.
+            - **🎙️ Press & Hold Walkie-Talkie Microphone**: Hold thumb to speak with haptic vibration, release to immediately save. Features high-precision Bengali NLP note cleaning and Income/Expense parsing.
+            - **🖼️ Facebook-style Profile Photo Tool**: Drag-to-pan, 1x-3x zoom, 90° rotation, and circular crop with support for iPhone 10MB HEIC photos.
+            - **🔄 In-App 1-Tap Auto Updater**: Seamless in-app download and installation directly from GitHub Releases.
             - **Direct Download**:
-              - **[Download TakaFlow.apk](https://github.com/see-yaam/takaflow-financetracker/releases/download/v1.0.6/TakaFlow.apk)**
+              - **[Download TakaFlow.apk](https://github.com/see-yaam/takaflow-financetracker/releases/download/v1.0.7/TakaFlow.apk)**
           files: TakaFlow.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

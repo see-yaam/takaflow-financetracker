@@ -17,28 +17,45 @@ export function useWallets() {
       return data;
     },
     enabled: !!user,
+    networkMode: "offlineFirst",
   });
 }
+
+import { handleOfflineCreateWallet } from "@/lib/offlineSync";
 
 export function useCreateWallet() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
+    networkMode: "offlineFirst",
     mutationFn: async ({ name, balance, icon, currency }: { name: string; balance: number; icon?: string; currency?: string }) => {
       const parsed = walletCreateSchema.parse({ name, balance, icon, currency: currency || "BDT" });
-      const { data, error } = await supabase
-        .from("wallets")
-        .insert({
-          name: parsed.name,
-          balance: parsed.balance,
-          icon: parsed.icon || "wallet",
-          user_id: user!.id,
-          currency: parsed.currency,
-        } as any)
-        .select()
-        .single();
-      throwIfSupabaseError(error);
-      return data;
+      const userId = user?.id || "local_user";
+
+      // 1. Direct offline mode fallback
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        return handleOfflineCreateWallet(parsed, userId, qc);
+      }
+
+      // 2. Online insertion with optimistic fallback if network/auth fails
+      try {
+        const { data, error } = await supabase
+          .from("wallets")
+          .insert({
+            name: parsed.name,
+            balance: parsed.balance,
+            icon: parsed.icon || "wallet",
+            user_id: user?.id,
+            currency: parsed.currency,
+          } as any)
+          .select()
+          .single();
+        throwIfSupabaseError(error);
+        return data;
+      } catch (err: any) {
+        // If network error / failed to fetch, save locally and sync later!
+        return handleOfflineCreateWallet(parsed, userId, qc);
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["wallets"] }),
   });

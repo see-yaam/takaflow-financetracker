@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { mapSupabaseError, throwIfSupabaseError } from "@/lib/supabaseErrors";
 import SignOutConfirmDialog from "@/components/SignOutConfirmDialog";
 import SettingsDangerZone from "@/components/settings/SettingsDangerZone";
+import ProfilePhotoCropperModal from "@/components/ProfilePhotoCropperModal";
 import {
   User as UserIcon,
   Mail,
@@ -41,6 +42,8 @@ export default function ProfilePage() {
   const [editingName, setEditingName] = useState(false);
   const [nameInput, setNameInput] = useState(user?.user_metadata?.full_name || "");
   const [savingName, setSavingName] = useState(false);
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [rawImageSrc, setRawImageSrc] = useState<string | null>(null);
 
   // Email Change State (with 6-Digit OTP verification)
   const [showEmailForm, setShowEmailForm] = useState(false);
@@ -80,70 +83,81 @@ export default function ProfilePage() {
     return () => clearTimeout(timer);
   }, [showEmailForm, emailStep, emailResendTimer]);
 
-  // 1. Upload Profile Photo (Max 5MB)
+  // 1. Upload Profile Photo with Interactive Cropper (Max 10MB, supports HEIC)
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const MAX_SIZE = 5 * 1024 * 1024;
+    // Up to 10MB input is safe since Canvas downscales & crops to ~40KB before sending to database
+    const MAX_SIZE = 10 * 1024 * 1024;
     if (file.size > MAX_SIZE) {
-      toast.error("Image size exceeds 5MB limit. Please select a smaller photo.");
+      toast.error("Image size exceeds 10MB limit. Please select a photo within 10MB.");
       if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
-    if (!file.type.startsWith("image/")) {
-      toast.error("Please upload a valid image file (PNG, JPG, WebP).");
+    const isHeic =
+      file.type === "image/heic" ||
+      file.type === "image/heif" ||
+      /\.(heic|heif)$/i.test(file.name);
+
+    if (!isHeic && !file.type.startsWith("image/")) {
+      toast.error("Please upload a valid image file (PNG, JPG, WebP, HEIC).");
+      if (fileInputRef.current) fileInputRef.current.value = "";
       return;
     }
 
+    let processableBlob: Blob = file;
+
+    // Convert iPhone HEIC/HEIF to JPEG on-the-fly
+    if (isHeic) {
+      const toastId = toast.loading("Converting iPhone HEIC photo...");
+      try {
+        const heic2any = (await import("heic2any")).default;
+        const converted = await heic2any({
+          blob: file,
+          toType: "image/jpeg",
+          quality: 0.9,
+        });
+        processableBlob = Array.isArray(converted) ? converted[0] : converted;
+        toast.dismiss(toastId);
+      } catch (conversionErr) {
+        toast.dismiss(toastId);
+        console.error("HEIC conversion failed:", conversionErr);
+        toast.error("Could not process HEIC image. Please select a JPG or PNG photo.");
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (result) {
+        setRawImageSrc(result);
+        setCropperOpen(true);
+      }
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    };
+    reader.readAsDataURL(processableBlob);
+  };
+
+  const handleCropComplete = async (croppedDataUrl: string) => {
     setUploading(true);
-
     try {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const img = new Image();
-        img.src = event.target?.result as string;
-        img.onload = async () => {
-          const canvas = document.createElement("canvas");
-          const MAX_DIM = 360;
-          let width = img.width;
-          let height = img.height;
+      const { error } = await supabase.auth.updateUser({
+        data: {
+          ...user?.user_metadata,
+          avatar_url: croppedDataUrl,
+        },
+      });
 
-          if (width > height) {
-            if (width > MAX_DIM) {
-              height = Math.round((height * MAX_DIM) / width);
-              width = MAX_DIM;
-            }
-          } else {
-            if (height > MAX_DIM) {
-              width = Math.round((width * MAX_DIM) / height);
-              height = MAX_DIM;
-            }
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext("2d");
-          ctx?.drawImage(img, 0, 0, width, height);
-
-          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
-
-          const { error } = await supabase.auth.updateUser({
-            data: {
-              ...user?.user_metadata,
-              avatar_url: compressedDataUrl,
-            },
-          });
-
-          if (error) throw error;
-          toast.success("Profile photo updated successfully!");
-          setUploading(false);
-        };
-      };
-      reader.readAsDataURL(file);
+      if (error) throw error;
+      toast.success("Profile photo updated successfully!");
     } catch (err) {
       toast.error(mapSupabaseError(err));
+      throw err;
+    } finally {
       setUploading(false);
     }
   };
@@ -414,7 +428,7 @@ export default function ProfilePage() {
             <input
               ref={fileInputRef}
               type="file"
-              accept="image/*"
+              accept="image/*,.heic,.HEIC,.heif,.HEIF"
               onChange={handleImageChange}
               className="hidden"
             />
@@ -814,6 +828,13 @@ export default function ProfilePage() {
       />
 
       <SignOutConfirmDialog open={signOutOpen} onOpenChange={setSignOutOpen} onConfirm={signOut} />
+
+      <ProfilePhotoCropperModal
+        open={cropperOpen}
+        onOpenChange={setCropperOpen}
+        imageSrc={rawImageSrc}
+        onCropComplete={handleCropComplete}
+      />
     </div>
   );
 }

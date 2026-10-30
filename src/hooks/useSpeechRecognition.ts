@@ -31,16 +31,22 @@ declare global {
   }
 }
 
+let micPermissionGranted = false;
+
 export function useSpeechRecognition() {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSupported, setIsSupported] = useState(false);
   const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
+  const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     setIsSupported(!!SpeechRecognition);
+    return () => {
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+    };
   }, []);
 
   const startListening = useCallback(async (lang?: string) => {
@@ -50,12 +56,12 @@ export function useSpeechRecognition() {
       return;
     }
 
-    // 1. Explicitly request microphone stream to trigger Android / Browser system permission popup
-    if (typeof navigator !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    // 1. Explicitly request microphone stream ONCE to trigger system permission popup with zero repeat latency
+    if (!micPermissionGranted && typeof navigator !== "undefined" && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        // Immediately release tracks once permission is granted
         stream.getTracks().forEach((track) => track.stop());
+        micPermissionGranted = true;
       } catch (micErr: any) {
         console.warn("Microphone access error:", micErr);
         if (micErr.name === "NotAllowedError" || micErr.name === "PermissionDeniedError") {
@@ -69,13 +75,16 @@ export function useSpeechRecognition() {
       if (recognitionRef.current) {
         recognitionRef.current.abort();
       }
+      if (silenceTimerRef.current) {
+        clearTimeout(silenceTimerRef.current);
+      }
 
       const recognition = new SpeechRecognition();
-      recognition.continuous = false;
+      // Continuous mode enables natural human pauses between words without cutting off mid-sentence
+      recognition.continuous = true;
       recognition.interimResults = true;
 
-      // Default to "bn-BD" for accurate Bangladeshi Bangla/Banglish speech recognition,
-      // avoiding Windows OS en-US default which misinterprets Bangla speech into English syllables
+      // Default to "bn-BD" which handles mixed Bengali + English/Banglish code-switching in Bangladesh
       recognition.lang = lang || "bn-BD";
 
       recognition.onstart = () => {
@@ -84,11 +93,23 @@ export function useSpeechRecognition() {
       };
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        let currentText = "";
-        for (let i = event.resultIndex; i < event.results.length; ++i) {
-          currentText += event.results[i][0].transcript;
+        // Accumulate entire sentence from 0 to results.length to prevent dropping earlier words
+        let fullSentence = "";
+        for (let i = 0; i < event.results.length; ++i) {
+          fullSentence += event.results[i][0].transcript;
         }
-        setTranscript(currentText);
+        setTranscript(fullSentence);
+
+        // Reset silence timer on every new speech token
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+        }
+        // Auto-finalize 1.6s after user finishes speaking their sentence
+        silenceTimerRef.current = setTimeout(() => {
+          if (recognitionRef.current) {
+            recognitionRef.current.stop();
+          }
+        }, 1600);
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
@@ -103,6 +124,9 @@ export function useSpeechRecognition() {
 
       recognition.onend = () => {
         setIsListening(false);
+        if (silenceTimerRef.current) {
+          clearTimeout(silenceTimerRef.current);
+        }
       };
 
       recognitionRef.current = recognition;
@@ -114,6 +138,9 @@ export function useSpeechRecognition() {
   }, []);
 
   const stopListening = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
     if (recognitionRef.current) {
       recognitionRef.current.stop();
     }
@@ -121,6 +148,9 @@ export function useSpeechRecognition() {
   }, []);
 
   const resetTranscript = useCallback(() => {
+    if (silenceTimerRef.current) {
+      clearTimeout(silenceTimerRef.current);
+    }
     setTranscript("");
     setError(null);
   }, []);

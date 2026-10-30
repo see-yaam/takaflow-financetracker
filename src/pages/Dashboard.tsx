@@ -36,7 +36,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
-import { cn } from "@/lib/utils";
+import { cn, formatMoney } from "@/lib/utils";
 
 const iconMap: Record<string, React.ElementType> = {
   smartphone: Smartphone,
@@ -194,11 +194,12 @@ export default function Dashboard() {
         </div>
         <h2
           className={cn(
-            "text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight tabular-nums text-foreground transition-all duration-300",
+            "text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight tabular-nums transition-all duration-300",
+            totalBalance < 0 ? "text-destructive" : "text-foreground",
             isDisguised ? "filter blur-lg select-none opacity-40" : "filter blur-0 opacity-100"
           )}
         >
-          ৳{totalBalance.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+          {formatMoney(totalBalance)}
         </h2>
       </motion.div>
 
@@ -218,6 +219,7 @@ export default function Dashboard() {
           const Icon = iconMap[w.icon || "wallet"] || Wallet;
           const currency = (w as any).currency || "BDT";
           const bdtEquiv = convertToBDT(Number(w.balance), currency, rates);
+          const isNegative = Number(w.balance) < 0;
           return (
             <motion.div
               key={w.id}
@@ -239,14 +241,20 @@ export default function Dashboard() {
                 {currency !== "BDT" && (
                   <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground ml-auto">{currency}</span>
                 )}
+                {isNegative && (
+                  <span className="text-[10px] bg-destructive/15 text-destructive border border-destructive/25 px-1.5 py-0.2 rounded font-semibold ml-auto">
+                    Overdrawn
+                  </span>
+                )}
               </div>
               <p
                 className={cn(
-                  "text-xl sm:text-2xl font-bold tracking-tight tabular-nums text-foreground transition-all duration-300",
+                  "text-xl sm:text-2xl font-bold tracking-tight tabular-nums transition-all duration-300",
+                  isNegative ? "text-destructive" : "text-foreground",
                   isDisguised ? "filter blur-md select-none opacity-40" : "filter blur-0 opacity-100"
                 )}
               >
-                {currency !== "BDT" ? `${currency} ` : "৳"}{Number(w.balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                {formatMoney(Number(w.balance), currency)}
               </p>
               {currency !== "BDT" && (
                 <p
@@ -255,7 +263,7 @@ export default function Dashboard() {
                     isDisguised ? "filter blur-sm select-none opacity-40" : ""
                   )}
                 >
-                  ≈ ৳{bdtEquiv.toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                  ≈ {formatMoney(bdtEquiv, "BDT")}
                 </p>
               )}
             </motion.div>
@@ -332,16 +340,19 @@ export default function Dashboard() {
           <h3 className="wallet-label mb-1">Quick Actions</h3>
           <Button
             onClick={() => setVoiceOpen(true)}
-            className="bg-gradient-to-r from-primary/20 via-primary/30 to-emerald-500/20 text-foreground hover:from-primary/30 hover:to-emerald-500/30 border border-primary/40 font-semibold shadow-sm"
+            className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold shadow-sm"
           >
-            <Mic className="h-4 w-4 mr-2 text-primary" /> Voice Add
+            <Mic className="h-4 w-4" />
+            <span>Voice Add</span>
           </Button>
           <div className="grid grid-cols-2 gap-2">
             <Button onClick={() => openDrawer("income")} size="sm" className="bg-primary/15 text-primary hover:bg-primary/25 border-0">
-              <Plus className="h-3.5 w-3.5 mr-1.5" /> Income
+              <Plus className="h-3.5 w-3.5" />
+              <span>Income</span>
             </Button>
             <Button onClick={() => openDrawer("expense")} size="sm" variant="outline" className="border-border text-foreground hover:bg-muted/50">
-              <Plus className="h-3.5 w-3.5 mr-1.5" /> Expense
+              <Plus className="h-3.5 w-3.5" />
+              <span>Expense</span>
             </Button>
           </div>
         </div>

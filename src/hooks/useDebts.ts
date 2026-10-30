@@ -146,12 +146,17 @@ export function useAddDebtPayment() {
       });
       throwIfSupabaseError(payErr);
 
-      const newRemaining = parsed.currentRemaining - parsed.amount;
+      const newRemaining = Math.max(0, parsed.currentRemaining - parsed.amount);
       const updates: any = { remaining_amount: newRemaining };
       if (newRemaining <= 0) updates.settled = true;
 
       const { error: upErr } = await supabase.from("debts" as any).update(updates).eq("id", parsed.debtId);
       throwIfSupabaseError(upErr);
+
+      const extraAmount = parsed.amount > parsed.currentRemaining ? parsed.amount - parsed.currentRemaining : 0;
+      const defaultNote = extraAmount > 0
+        ? `${parsed.debtType === "borrowed" ? "Repaid to" : "Recovered from"} ${parsed.personName} (incl. ৳${extraAmount.toLocaleString()} extra/gift)`
+        : `${parsed.debtType === "borrowed" ? "Repaid to" : "Recovered from"} ${parsed.personName}`;
 
       const txType = parsed.debtType === "borrowed" ? "expense" : "income";
       const { error: txErr } = await supabase.from("transactions").insert({
@@ -160,7 +165,7 @@ export function useAddDebtPayment() {
         type: txType,
         amount: parsed.amount,
         category: parsed.debtType === "borrowed" ? "Debt Repayment" : "Debt Recovery",
-        note: `${parsed.debtType === "borrowed" ? "Repaid to" : "Recovered from"} ${parsed.personName}`,
+        note: parsed.note ? `${parsed.note} ${extraAmount > 0 ? `(৳${extraAmount.toLocaleString()} extra)` : ""}`.trim() : defaultNote,
         date: parsed.date,
       });
       throwIfSupabaseError(txErr);

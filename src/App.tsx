@@ -24,7 +24,26 @@ const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
-const queryClient = new QueryClient();
+import { setupQueryPersistence } from "@/lib/offlineSync";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      networkMode: "offlineFirst",
+      gcTime: Infinity, // Permanent: Never expires even after months offline
+      staleTime: 1000 * 60 * 2, // 2 minutes
+      retry: (failureCount) => {
+        if (typeof navigator !== "undefined" && !navigator.onLine) return false;
+        return failureCount < 2;
+      },
+    },
+    mutations: {
+      networkMode: "offlineFirst",
+    },
+  },
+});
+
+setupQueryPersistence(queryClient);
 
 function PageLoader() {
   return (

@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,8 +12,10 @@ import { useWallets } from "@/hooks/useWallets";
 import { useCreateTransaction } from "@/hooks/useTransactions";
 import { useCustomCategories, useCreateCustomCategory } from "@/hooks/useCustomCategories";
 import CategoryPicker from "@/components/CategoryPicker";
+import InsufficientBalanceModal, { AttemptedExpense } from "@/components/InsufficientBalanceModal";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { cn } from "@/lib/utils";
 
 interface Props {
   open: boolean;
@@ -46,6 +48,19 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
   const [note, setNote] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isAiParsing, setIsAiParsing] = useState(false);
+  const [insufficientOpen, setInsufficientOpen] = useState(false);
+  const [insufficientData, setInsufficientData] = useState<AttemptedExpense | null>(null);
+
+  const [selectedLang, setSelectedLang] = useState<"auto" | "bn-BD" | "en-US">(() => {
+    try {
+      return (localStorage.getItem("takaflow_voice_lang") as "auto" | "bn-BD" | "en-US") || "auto";
+    } catch {
+      return "auto";
+    }
+  });
+
+  const holdStartRef = useRef<number | null>(null);
+  const [isHolding, setIsHolding] = useState(false);
 
   // Set default wallet when available
   useEffect(() => {
@@ -54,19 +69,94 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
     }
   }, [wallets, walletId]);
 
-  // When modal opens, auto-start speech recognition (auto language detection)
+  // When modal opens/closes, reset state
   useEffect(() => {
     if (open) {
       setParsed(null);
       setIsAiParsing(false);
       resetTranscript();
-      if (isSupported) {
-        startListening();
-      }
+      setIsHolding(false);
     } else {
       stopListening();
     }
-  }, [open, isSupported]);
+  }, [open]);
+
+  const switchLang = (newLang: "auto" | "bn-BD" | "en-US") => {
+    setSelectedLang(newLang);
+    try {
+      localStorage.setItem("takaflow_voice_lang", newLang);
+    } catch {}
+    resetTranscript();
+    setParsed(null);
+    if (isListening) {
+      startListening(newLang === "en-US" ? "en-US" : "bn-BD");
+    }
+  };
+
+  // Press and Hold Handlers with pointer capture for mobile stability
+  const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {}
+
+    // If already listening from a previous tap, this click toggles it off
+    if (isListening && !isHolding) {
+      stopListening();
+      holdStartRef.current = null;
+      setIsHolding(false);
+      try {
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(20);
+        }
+      } catch {}
+      return;
+    }
+
+    holdStartRef.current = Date.now();
+    setIsHolding(true);
+    setParsed(null);
+    setIsAiParsing(false);
+    resetTranscript();
+    startListening(selectedLang === "en-US" ? "en-US" : "bn-BD");
+    try {
+      if (typeof navigator !== "undefined" && navigator.vibrate) {
+        navigator.vibrate(40);
+      }
+    } catch {}
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+
+    if (!holdStartRef.current) return;
+    const duration = Date.now() - holdStartRef.current;
+    holdStartRef.current = null;
+    setIsHolding(false);
+
+    // If held for 220ms or more: Walkie-Talkie mode -> stop immediately when thumb is released!
+    if (duration >= 220) {
+      stopListening();
+      try {
+        if (typeof navigator !== "undefined" && navigator.vibrate) {
+          navigator.vibrate(25);
+        }
+      } catch {}
+    }
+    // If quick tap (< 220ms), it remains active in hands-free tap mode
+  };
+
+  const handlePointerCancel = (e: React.PointerEvent<HTMLButtonElement>) => {
+    try {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    } catch {}
+    if (holdStartRef.current) {
+      holdStartRef.current = null;
+      setIsHolding(false);
+      stopListening();
+    }
+  };
 
   // When speech stops and transcript exists, parse it with existing categories
   useEffect(() => {
@@ -140,7 +230,7 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
     setParsed(null);
     setIsAiParsing(false);
     resetTranscript();
-    startListening();
+    startListening(selectedLang);
   };
 
   const handleSave = async () => {
@@ -149,8 +239,28 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
       toast.error("Please enter a valid amount");
       return;
     }
-    if (!walletId && wallets && wallets.length > 0) {
-      setWalletId(wallets[0].id);
+
+    const chosenWalletId = walletId || (wallets && wallets.length > 0 ? wallets[0].id : "");
+    if (!walletId && chosenWalletId) {
+      setWalletId(chosenWalletId);
+    }
+
+    // Edge Case Protection: Taka can NEVER be negative!
+    if (type === "expense") {
+      const selectedWallet = wallets?.find((w) => w.id === chosenWalletId);
+      const currentBal = Number(selectedWallet?.balance || 0);
+
+      if (selectedWallet && currentBal < num) {
+        setInsufficientData({
+          walletId: chosenWalletId,
+          amount: num,
+          category: category.trim() || "General Expense",
+          note: note || "Voice expense",
+          date: format(new Date(), "yyyy-MM-dd"),
+        });
+        setInsufficientOpen(true);
+        return;
+      }
     }
 
     setIsSaving(true);
@@ -198,7 +308,8 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md p-6 bg-card/95 backdrop-blur-xl border-border/60 shadow-2xl rounded-2xl">
         <DialogHeader className="pb-2 border-b border-border/40">
           <DialogTitle className="text-base font-bold flex items-center gap-2 text-foreground">
@@ -210,39 +321,98 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
           </p>
         </DialogHeader>
 
-        <div className="space-y-5 py-2">
+        <div className="space-y-4 py-2">
+          {/* Language Toggle: Auto (Mixed) vs বাংলা vs English */}
+          <div className="flex items-center justify-center p-1 rounded-xl bg-secondary/80 border border-border/50 max-w-[270px] mx-auto">
+            <button
+              type="button"
+              onClick={() => switchLang("auto")}
+              className={cn(
+                "flex-1 py-1 px-2.5 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1",
+                selectedLang === "auto"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+              title="Automatically detects Mixed Bangla, Banglish, and English"
+            >
+              <span>⚡</span> Auto
+            </button>
+            <button
+              type="button"
+              onClick={() => switchLang("bn-BD")}
+              className={cn(
+                "flex-1 py-1 px-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1",
+                selectedLang === "bn-BD"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <span>🇧🇩</span> বাংলা
+            </button>
+            <button
+              type="button"
+              onClick={() => switchLang("en-US")}
+              className={cn(
+                "flex-1 py-1 px-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1",
+                selectedLang === "en-US"
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              )}
+            >
+              <span>🇺🇸</span> English
+            </button>
+          </div>
+
           {/* Visual Microphone Section */}
           <div className="flex flex-col items-center justify-center pt-2 pb-1">
             <div className="relative flex items-center justify-center">
-              {isListening && (
+              {(isListening || isHolding) && (
                 <>
-                  <div className="absolute h-24 w-24 rounded-full bg-primary/20 animate-ping opacity-75" />
-                  <div className="absolute h-28 w-28 rounded-full bg-primary/10 animate-pulse" />
+                  <div className="absolute h-24 w-24 rounded-full bg-primary/30 animate-ping opacity-75" />
+                  <div className="absolute h-32 w-32 rounded-full bg-primary/15 animate-pulse" />
+                  <div className="absolute h-40 w-40 rounded-full bg-primary/5 animate-pulse delay-150" />
                 </>
               )}
               <button
                 type="button"
-                onClick={isListening ? stopListening : handleStartAgain}
-                className={`relative z-10 h-16 w-16 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg ${
-                  isListening
-                    ? "bg-primary text-primary-foreground scale-105 shadow-primary/30 ring-4 ring-primary/20"
-                    : "bg-secondary text-foreground hover:bg-primary/20 hover:text-primary"
-                }`}
+                onPointerDown={handlePointerDown}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerCancel}
+                onContextMenu={(e) => e.preventDefault()}
+                className={cn(
+                  "relative z-10 h-22 w-22 rounded-full flex items-center justify-center transition-all duration-200 shadow-xl select-none touch-none cursor-pointer",
+                  isListening || isHolding
+                    ? "bg-primary text-primary-foreground scale-110 shadow-primary/50 ring-8 ring-primary/30"
+                    : "bg-secondary text-foreground hover:bg-primary/20 hover:text-primary active:scale-95"
+                )}
+                title="Press & hold to speak, release to finish"
               >
-                {isListening ? (
-                  <Mic className="h-7 w-7 animate-pulse" />
+                {isListening || isHolding ? (
+                  <Mic className="h-10 w-10 animate-pulse text-primary-foreground" />
                 ) : (
-                  <MicOff className="h-7 w-7 text-muted-foreground" />
+                  <Mic className="h-10 w-10 text-muted-foreground" />
                 )}
               </button>
             </div>
 
-            <p className="text-xs text-muted-foreground font-medium mt-3 text-center">
-              {isListening
-                ? "শুনছি... স্বাভাবিকভাবে মুখে বলুন (যেমন: '৪০০ টাকা রেস্টুরেন্টে খরচ')"
-                : transcript
-                ? "কথা বলা শেষ হয়েছে। নিচে কনফার্ম করুন:"
-                : "মাইক্রোফোনে ট্যাপ করে কথা বলুন"}
+            <p className="text-xs font-medium mt-4 text-center transition-colors">
+              {isHolding ? (
+                <span className="text-primary font-semibold flex items-center justify-center gap-1.5 animate-pulse">
+                  <span className="h-2 w-2 rounded-full bg-primary inline-block" />
+                  আঙুল চেপে ধরে কথা বলুন... ছাড়লে সেভ হবে
+                </span>
+              ) : isListening ? (
+                <span className="text-primary font-semibold flex items-center justify-center gap-1.5 animate-pulse">
+                  <span className="h-2 w-2 rounded-full bg-primary inline-block" />
+                  শুনছি... কথা বলা শেষ হলে ট্যাপ করুন
+                </span>
+              ) : transcript ? (
+                <span className="text-foreground">কথা বলা শেষ হয়েছে। নিচে কনফার্ম করুন:</span>
+              ) : (
+                <span className="text-muted-foreground flex items-center justify-center gap-1.5">
+                  🎙️ <b>চেপে ধরে রাখুন (Hold)</b> কথা বলতে • অথবা ট্যাপ করুন
+                </span>
+              )}
             </p>
 
             {error && (
@@ -414,5 +584,13 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
         </div>
       </DialogContent>
     </Dialog>
+
+    <InsufficientBalanceModal
+      open={insufficientOpen}
+      onOpenChange={setInsufficientOpen}
+      attemptedExpense={insufficientData}
+      onSuccess={() => onOpenChange(false)}
+    />
+  </>
   );
 }

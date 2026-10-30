@@ -6,6 +6,7 @@ import { useState } from "react";
 import SignOutConfirmDialog from "@/components/SignOutConfirmDialog";
 import VoiceTransactionModal from "@/components/voice/VoiceTransactionModal";
 import { useAutoSmsSync } from "@/hooks/useAutoSmsSync";
+import OfflineSyncBadge from "@/components/OfflineSyncBadge";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -49,7 +50,8 @@ export default function AppLayout() {
           </span>
         </Link>
 
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2">
+          <OfflineSyncBadge />
           <Link
             to="/settings"
             className={cn(
@@ -88,6 +90,16 @@ export default function AppLayout() {
               )}
             </Link>
           )}
+
+          <button
+            type="button"
+            onClick={() => setSignOutOpen(true)}
+            className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            title="Sign Out"
+            aria-label="Sign Out"
+          >
+            <LogOut className="h-4.5 w-4.5" />
+          </button>
         </div>
       </header>
 
@@ -102,7 +114,10 @@ export default function AppLayout() {
               </span>
               TakaFlow
             </h1>
-            <p className="text-xs text-muted-foreground mt-1">Finance Tracker Vault</p>
+            <div className="flex items-center justify-between mt-1">
+              <p className="text-xs text-muted-foreground">Finance Tracker Vault</p>
+              <OfflineSyncBadge />
+            </div>
           </Link>
           <nav className="space-y-1">
             {navItems.map((item) => (

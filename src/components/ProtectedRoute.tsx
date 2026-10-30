@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { Navigate, useLocation } from "react-router-dom";
 import { useWallets } from "@/hooks/useWallets";
@@ -6,8 +7,18 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
   const { data: wallets, isLoading: walletsLoading } = useWallets();
+  const [walletWaitTimeout, setWalletWaitTimeout] = useState(false);
 
-  if (loading || (user && walletsLoading)) {
+  useEffect(() => {
+    if (user && walletsLoading) {
+      const timer = setTimeout(() => {
+        setWalletWaitTimeout(true);
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [user, walletsLoading]);
+
+  if (loading || (user && walletsLoading && !walletWaitTimeout)) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-muted-foreground animate-pulse text-lg">Loading vault...</div>

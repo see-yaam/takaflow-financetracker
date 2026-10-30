@@ -3,6 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
 import { transactionCreateSchema } from "@/lib/validations";
+import {
+  handleOfflineCreateTransaction,
+  handleOfflineDeleteTransaction,
+  handleOfflineReverseTransaction,
+} from "@/lib/offlineSync";
+import { toast } from "sonner";
 
 export function useTransactions(filters?: { month?: string; walletId?: string; category?: string }) {
   const { user } = useAuth();
@@ -28,6 +34,7 @@ export function useTransactions(filters?: { month?: string; walletId?: string; c
       return data;
     },
     enabled: !!user,
+    networkMode: "offlineFirst",
   });
 }
 
@@ -35,20 +42,45 @@ export function useCreateTransaction() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
+    networkMode: "offlineFirst",
     mutationFn: async (tx: { wallet_id: string; type: string; amount: number; category: string; note?: string; date?: string }) => {
       const parsed = transactionCreateSchema.parse({
         ...tx,
         date: tx.date || new Date().toISOString().slice(0, 10),
       });
-      const { data, error } = await supabase
-        .from("transactions")
-        .insert({ ...parsed, user_id: user!.id } as any)
-        .select()
-        .single();
-      throwIfSupabaseError(error);
-      return data;
+
+      // 1. Direct offline fallback if network is down
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        return handleOfflineCreateTransaction(parsed, user!.id, qc);
+      }
+
+      // 2. Try online insert
+      try {
+        const { data, error } = await supabase
+          .from("transactions")
+          .insert({ ...parsed, user_id: user!.id } as any)
+          .select()
+          .single();
+        throwIfSupabaseError(error);
+        return data;
+      } catch (err: any) {
+        // Fallback to offline queue if network connection failed
+        const isNetworkFailure =
+          !navigator.onLine ||
+          err?.message?.includes("Failed to fetch") ||
+          err?.message?.includes("NetworkError") ||
+          err?.name === "TypeError";
+
+        if (isNetworkFailure) {
+          return handleOfflineCreateTransaction(parsed, user!.id, qc);
+        }
+        throw err;
+      }
     },
-    onSuccess: () => {
+    onSuccess: (data: any) => {
+      if (data?._isOfflinePending) {
+        toast.info("Saved offline ☁️ Will sync automatically when back online.");
+      }
       qc.invalidateQueries({ queryKey: ["transactions"] });
       qc.invalidateQueries({ queryKey: ["wallets"] });
     },
@@ -58,9 +90,26 @@ export function useCreateTransaction() {
 export function useDeleteTransaction() {
   const qc = useQueryClient();
   return useMutation({
+    networkMode: "offlineFirst",
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("transactions").delete().eq("id", id);
-      throwIfSupabaseError(error);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        handleOfflineDeleteTransaction(id, qc);
+        return;
+      }
+      try {
+        const { error } = await supabase.from("transactions").delete().eq("id", id);
+        throwIfSupabaseError(error);
+      } catch (err: any) {
+        const isNetworkFailure =
+          !navigator.onLine ||
+          err?.message?.includes("Failed to fetch") ||
+          err?.name === "TypeError";
+        if (isNetworkFailure) {
+          handleOfflineDeleteTransaction(id, qc);
+          return;
+        }
+        throw err;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });
@@ -72,12 +121,29 @@ export function useDeleteTransaction() {
 export function useReverseTransaction() {
   const qc = useQueryClient();
   return useMutation({
+    networkMode: "offlineFirst",
     mutationFn: async (id: string) => {
-      const { error } = await supabase
-        .from("transactions")
-        .update({ is_reversed: true } as any)
-        .eq("id", id);
-      throwIfSupabaseError(error);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        handleOfflineReverseTransaction(id, qc);
+        return;
+      }
+      try {
+        const { error } = await supabase
+          .from("transactions")
+          .update({ is_reversed: true } as any)
+          .eq("id", id);
+        throwIfSupabaseError(error);
+      } catch (err: any) {
+        const isNetworkFailure =
+          !navigator.onLine ||
+          err?.message?.includes("Failed to fetch") ||
+          err?.name === "TypeError";
+        if (isNetworkFailure) {
+          handleOfflineReverseTransaction(id, qc);
+          return;
+        }
+        throw err;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });
@@ -89,6 +155,7 @@ export function useReverseTransaction() {
 export function useUpdateTransactionCategory() {
   const qc = useQueryClient();
   return useMutation({
+    networkMode: "offlineFirst",
     mutationFn: async ({ id, category }: { id: string; category: string }) => {
       const { error } = await supabase
         .from("transactions")

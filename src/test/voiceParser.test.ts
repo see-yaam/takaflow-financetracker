@@ -186,7 +186,44 @@ describe("Voice Transaction NLP Parser", () => {
       expect(res?.type).toBe("expense");
       expect(res?.category).toBe("Lost Money");
       expect(res?.detectedWallet).toBe("Cash");
-      expect(res?.note).toBe("হারায় গেছে।");
+      expect(res?.note).toBe("হারায় গেছে");
+    });
+
+    it("parses: '400 টাকার রেস্টুরেন্ট খরচ।' with clean note", () => {
+      const res = parseVoiceInput("400 টাকার রেস্টুরেন্ট খরচ।");
+      expect(res).not.toBeNull();
+      expect(res?.amount).toBe(400);
+      expect(res?.type).toBe("expense");
+      expect(res?.category).toBe("Food & Dining");
+      expect(res?.note).toBe("রেস্টুরেন্ট খরচ");
+    });
+
+    it("parses: 'ইনকাম ঈদ বোনাস ৳100।' as Income with clean note", () => {
+      const res = parseVoiceInput("ইনকাম ঈদ বোনাস ৳100।");
+      expect(res).not.toBeNull();
+      expect(res?.amount).toBe(100);
+      expect(res?.type).toBe("income");
+      expect(res?.note).toBe("ঈদ বোনাস");
+    });
+
+    it("parses: '৳1,00,000 স্যালারি পাইসি বিকাশে।' as Income Salary in bKash with clean note", () => {
+      const res = parseVoiceInput("৳1,00,000 স্যালারি পাইসি বিকাশে।");
+      expect(res).not.toBeNull();
+      expect(res?.amount).toBe(100000);
+      expect(res?.type).toBe("income");
+      expect(res?.category).toBe("Salary");
+      expect(res?.detectedWallet).toBe("bKash");
+      expect(res?.note).toBe("স্যালারি পাইসি");
+    });
+
+    it("parses: 'আজকের লাভ ৳1000 ব্যাংকে।' as Income Investments in Bank with clean note", () => {
+      const res = parseVoiceInput("আজকের লাভ ৳1000 ব্যাংকে।");
+      expect(res).not.toBeNull();
+      expect(res?.amount).toBe(1000);
+      expect(res?.type).toBe("income");
+      expect(res?.category).toBe("Investments");
+      expect(res?.detectedWallet).toBe("Bank");
+      expect(res?.note).toBe("আজকের লাভ");
     });
 
     it("parses Banglish: 'pocket theke 500 taka haraye geche' as Cash and Lost Money", () => {

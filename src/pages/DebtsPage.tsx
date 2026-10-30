@@ -92,8 +92,8 @@ export default function DebtsPage() {
       return;
     }
     const amt = parseFloat(payAmount);
-    if (amt > payDialog.remaining_amount) {
-      toast.error("Amount exceeds remaining balance");
+    if (isNaN(amt) || amt <= 0) {
+      toast.error("Enter a valid payment amount");
       return;
     }
     if (payDialog.type === "borrowed") {
@@ -104,6 +104,7 @@ export default function DebtsPage() {
       }
     }
     try {
+      const extraAmt = amt > payDialog.remaining_amount ? amt - payDialog.remaining_amount : 0;
       await addPayment.mutateAsync({
         debtId: payDialog.id,
         amount: amt,
@@ -114,7 +115,11 @@ export default function DebtsPage() {
         personName: payDialog.person_name,
         currentRemaining: payDialog.remaining_amount,
       });
-      toast.success("Payment recorded!");
+      toast.success(
+        extraAmt > 0
+          ? `Payment recorded! Debt settled + ৳${extraAmt.toLocaleString()} extra/gift sent.`
+          : "Payment recorded!"
+      );
       setPayDialog(null);
       setPayAmount("");
       setPayNote("");
@@ -507,15 +512,29 @@ export default function DebtsPage() {
               <br />Remaining: <strong className="text-foreground">৳{Number(payDialog?.remaining_amount || 0).toLocaleString()}</strong>
             </p>
             <div className="space-y-2">
-              <Label>Amount</Label>
+              <div className="flex items-center justify-between">
+                <Label>Amount</Label>
+                {payDialog && parseFloat(payAmount) > Number(payDialog.remaining_amount) && (
+                  <span className="text-[11px] text-emerald-400 font-medium">
+                    +৳{(parseFloat(payAmount) - Number(payDialog.remaining_amount)).toLocaleString()} Extra/Gift
+                  </span>
+                )}
+              </div>
               <Input
                 type="number"
                 value={payAmount}
                 onChange={(e) => setPayAmount(e.target.value)}
                 placeholder="1000"
-                max={payDialog?.remaining_amount}
                 className="bg-secondary border-border"
               />
+              {payDialog && parseFloat(payAmount) > Number(payDialog.remaining_amount) && (
+                <div className="p-2.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-xs text-emerald-400 flex items-center justify-between">
+                  <span>দেনা শোধের চেয়ে বেশি দিচ্ছেন (উপহার/কৃতজ্ঞতা):</span>
+                  <span className="font-semibold font-mono">
+                    +৳{(parseFloat(payAmount) - Number(payDialog.remaining_amount)).toLocaleString()}
+                  </span>
+                </div>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Wallet</Label>

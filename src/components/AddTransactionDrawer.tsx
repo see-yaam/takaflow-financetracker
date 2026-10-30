@@ -19,6 +19,7 @@ import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { format } from "date-fns";
 import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import CategoryPicker from "@/components/CategoryPicker";
+import InsufficientBalanceModal, { AttemptedExpense } from "@/components/InsufficientBalanceModal";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -39,6 +40,8 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   const [note, setNote] = useState("");
   const [date, setDate] = useState(defaultDate || format(new Date(), "yyyy-MM-dd"));
   const [recurring, setRecurring] = useState(false);
+  const [insufficientOpen, setInsufficientOpen] = useState(false);
+  const [insufficientData, setInsufficientData] = useState<AttemptedExpense | null>(null);
 
 
   useEffect(() => {
@@ -62,11 +65,37 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
       toast.error("Fill in required fields");
       return;
     }
+
+    const parsedAmount = parseFloat(amount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+
+    // Edge Case Protection: Taka can NEVER be negative!
+    if (type === "expense") {
+      const selectedWallet = wallets?.find((w) => w.id === walletId);
+      const currentBal = Number(selectedWallet?.balance || 0);
+
+      if (selectedWallet && currentBal < parsedAmount) {
+        setInsufficientData({
+          walletId,
+          amount: parsedAmount,
+          category: category.trim(),
+          note: note || undefined,
+          date,
+          recurring,
+        });
+        setInsufficientOpen(true);
+        return;
+      }
+    }
+
     try {
       await createTx.mutateAsync({
         wallet_id: walletId,
         type,
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         category: category.trim(),
         note: note || undefined,
         date,
@@ -77,7 +106,7 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
         await createRecurring.mutateAsync({
           wallet_id: walletId,
           type,
-          amount: parseFloat(amount),
+          amount: parsedAmount,
           category: category.trim(),
           note: note || undefined,
           day_of_month: dayOfMonth,
@@ -96,7 +125,8 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   const isSubmitting = createTx.isPending || createRecurring.isPending;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <>
+      <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[480px] w-[95vw] max-h-[92vh] overflow-y-auto p-5 sm:p-6 bg-card border-border shadow-2xl rounded-2xl gap-4">
         <DialogHeader className="pr-6 text-left">
           <DialogTitle className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
@@ -252,5 +282,13 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
         </div>
       </DialogContent>
     </Dialog>
+
+    <InsufficientBalanceModal
+      open={insufficientOpen}
+      onOpenChange={setInsufficientOpen}
+      attemptedExpense={insufficientData}
+      onSuccess={() => onOpenChange(false)}
+    />
+  </>
   );
 }

@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { formatMoney } from "../lib/utils";
 
 describe("Financial Calculations & Business Logic Integrity", () => {
   describe("Wallet Balance Updates", () => {
@@ -70,6 +71,18 @@ describe("Financial Calculations & Business Logic Integrity", () => {
       remainingAmount += additionalLoan;
       expect(remainingAmount).toBe(8000);
     });
+
+    it("allows paying back more than remaining debt (gratitude/extra gift) and clamps remaining to 0", () => {
+      const remainingAmount = 100;
+      const paymentAmount = 120; // 100 debt + 20 extra gift
+      const newRemaining = Math.max(0, remainingAmount - paymentAmount);
+      const extraGift = paymentAmount > remainingAmount ? paymentAmount - remainingAmount : 0;
+      const settled = newRemaining === 0;
+
+      expect(newRemaining).toBe(0);
+      expect(extraGift).toBe(20);
+      expect(settled).toBe(true);
+    });
   });
 
   describe("Monthly Budget Tracking & Alerts", () => {
@@ -114,6 +127,46 @@ describe("Financial Calculations & Business Logic Integrity", () => {
       const gbpWalletAmount = 50;
       const gbpToBdt = gbpWalletAmount * rates["GBP"];
       expect(gbpToBdt).toBeCloseTo(7790); // 50 * 155.8 = 7,790 ৳
+    });
+  });
+
+  describe("Non-Negative Balance Protection & Currency Formatting", () => {
+    it("formats positive, zero, and negative money with proper sign placement", () => {
+      expect(formatMoney(50)).toBe("৳50.00");
+      expect(formatMoney(0)).toBe("৳0.00");
+      expect(formatMoney(-10)).toBe("-৳10.00");
+      expect(formatMoney(-60.5)).toBe("-৳60.50");
+      expect(formatMoney(120, "USD")).toBe("USD 120.00");
+      expect(formatMoney(-25, "USD")).toBe("-USD 25.00");
+    });
+
+    it("detects when an expense exceeds wallet balance and calculates shortage correctly", () => {
+      const walletBalance = 10;
+      const expenseAmount = 12;
+      const hasInsufficientBalance = walletBalance < expenseAmount;
+      const shortage = Math.max(0, expenseAmount - walletBalance);
+
+      expect(hasInsufficientBalance).toBe(true);
+      expect(shortage).toBe(2);
+    });
+
+    it("verifies inter-wallet loading prevents wallet balance from going negative", () => {
+      let bKashBalance = 10;
+      let pocketBalance = 50;
+      const expenseAmount = 12;
+      const shortage = expenseAmount - bKashBalance; // 2 ৳
+
+      // User transfers shortage from Pocket to bKash
+      pocketBalance -= shortage;
+      bKashBalance += shortage;
+
+      // Now expense executes
+      bKashBalance -= expenseAmount;
+
+      expect(bKashBalance).toBe(0); // Zero, NEVER negative!
+      expect(pocketBalance).toBe(48);
+      expect(bKashBalance >= 0).toBe(true);
+      expect(pocketBalance >= 0).toBe(true);
     });
   });
 });

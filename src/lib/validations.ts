@@ -5,6 +5,7 @@ const nonNegativeAmount = z.coerce.number().min(0, "Amount cannot be negative");
 const dateString = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date");
 const monthString = z.string().regex(/^\d{4}-\d{2}$/, "Invalid month");
 const uuid = z.string().uuid("Invalid selection");
+const idSchema = z.string().trim().min(1, "Invalid selection");
 
 export const walletCreateSchema = z.object({
   name: z.string().trim().min(1, "Wallet name is required").max(100),
@@ -14,13 +15,13 @@ export const walletCreateSchema = z.object({
 });
 
 export const walletUpdateSchema = z.object({
-  id: uuid,
+  id: idSchema,
   name: z.string().trim().min(1, "Wallet name is required").max(100).optional(),
   balance: nonNegativeAmount.optional(),
 });
 
 export const transactionCreateSchema = z.object({
-  wallet_id: uuid,
+  wallet_id: idSchema,
   type: z.enum(["income", "expense"]),
   amount: positiveAmount,
   category: z.string().trim().min(1, "Category is required").max(100),
@@ -29,7 +30,7 @@ export const transactionCreateSchema = z.object({
 });
 
 export const recurringCreateSchema = z.object({
-  wallet_id: uuid,
+  wallet_id: idSchema,
   type: z.enum(["income", "expense"]),
   amount: positiveAmount,
   category: z.string().trim().min(1, "Category is required").max(100),

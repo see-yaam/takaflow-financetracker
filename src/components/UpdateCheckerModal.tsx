@@ -8,7 +8,7 @@ import { Download, Sparkles, RefreshCw, CheckCircle2 } from "lucide-react";
 
 export default function UpdateCheckerModal() {
   const [open, setOpen] = useState(false);
-  const [currentVersion, setCurrentVersion] = useState("1.0.5");
+  const [currentVersion, setCurrentVersion] = useState("1.0.6");
   const [latestRelease, setLatestRelease] = useState<GitHubRelease | null>(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -22,7 +22,7 @@ export default function UpdateCheckerModal() {
 
     async function checkForUpdates() {
       try {
-        let activeVer = "1.0.5";
+        let activeVer = "1.0.6";
         try {
           const info = await AppUpdater.getAppVersion();
           if (info?.versionName) {
