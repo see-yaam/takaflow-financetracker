@@ -58,10 +58,8 @@ jobs:
           yes | sdkmanager --licenses 2>/dev/null || true
           sdkmanager "platforms;android-35" 2>/dev/null || true
 
-      - name: Copy web assets into Android project
-        run: |
-          mkdir -p android/app/src/main/assets/public
-          cp -r dist/* android/app/src/main/assets/public/
+      - name: Sync web assets and native plugins (Capacitor)
+        run: npx cap sync android
 
       - name: Make gradlew executable
         run: chmod +x android/gradlew

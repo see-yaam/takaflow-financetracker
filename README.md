@@ -115,3 +115,10 @@ cd android && ./gradlew assembleRelease
 ### Automated Pipelines
 - **Web (Vercel)**: Uses [`vercel.json`](vercel.json) SPA rewrite (`/(.*) -> /index.html`). Set all `VITE_*` variables (except `VITE_GEMINI_API_KEY`) in Vercel Project Settings.
 - **Android APK ([`.github/workflows/build-apk.yml`](.github/workflows/build-apk.yml))**: Runs on pushes/PRs to `main`. Executes `npm ci`, `npm test`, `npm run build`, copies `dist/` to Android assets, builds with Java 21 / SDK 35, signs `TakaFlow.apk` via `apksigner`, uploads CI artifact, and publishes a GitHub Release. *(See [`TARGETS.md`](TARGETS.md) `P0`/`P2` for CI dynamic versioning and keystore rotation steps.)*
+
+## Building the Android APK locally
+
+1. Bump `versionCode` / `versionName` in `android/app/build.gradle` (the web build and the in-app updater read the version from there; CI tags the GitHub Release `v<versionName>`).
+2. `npm ci && npm run build`
+3. `npx cap sync android` (copies `dist/` and registers native plugins such as local notifications)
+4. `cd android && ./gradlew assembleRelease` (signed only when `TAKAFLOW_KEYSTORE_PATH`, `TAKAFLOW_KEYSTORE_PASSWORD`, `TAKAFLOW_KEY_ALIAS`, `TAKAFLOW_KEY_PASSWORD` are set; CI injects them from GitHub Secrets).
