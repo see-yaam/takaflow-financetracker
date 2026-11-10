@@ -244,6 +244,24 @@ describe("Voice Transaction NLP Parser", () => {
       expect(res?.detectedWallet).toBe("Cash");
     });
 
+    it("parses: 'salary on pocket 20000' cleanly without trailing prepositions", () => {
+      const res = parseVoiceInput("salary on pocket 20000");
+      expect(res).not.toBeNull();
+      expect(res?.amount).toBe(20000);
+      expect(res?.type).toBe("income");
+      expect(res?.category).toBe("Salary");
+      expect(res?.note).toBe("Salary");
+    });
+
+    it("cleans speech glitch duplication: 'salarysalarysalary on pocketsalary on pocket 20000'", () => {
+      const res = parseVoiceInput("salarysalarysalary on pocketsalary on pocket 20000");
+      expect(res).not.toBeNull();
+      expect(res?.amount).toBe(20000);
+      expect(res?.type).toBe("income");
+      expect(res?.category).toBe("Salary");
+      expect(res?.note).toBe("Salary");
+    });
+
     it("guesses appropriate emojis for auto-built categories", () => {
       expect(guessCategoryEmoji("Gym")).toBe("🏋️");
       expect(guessCategoryEmoji("Dentist")).toBe("🩺");

@@ -12,6 +12,8 @@ import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { onboardingWalletSchema } from "@/lib/validations";
 import { motion } from "framer-motion";
 
+import { useAuth } from "@/contexts/AuthContext";
+
 const presets = [
   { name: "BKash", icon: "smartphone" },
   { name: "Bank", icon: "bank" },
@@ -32,6 +34,7 @@ interface WalletEntry {
 }
 
 export default function Onboarding() {
+  const { user } = useAuth();
   const [wallets, setWallets] = useState<WalletEntry[]>(
     presets.map((p) => ({ name: p.name, balance: "0", icon: p.icon, currency: "BDT" }))
   );
@@ -70,8 +73,13 @@ export default function Onboarding() {
         }) as { name: string; balance: number; icon: string; currency: string };
         await createWallet.mutateAsync(parsed);
       }
+      if (user?.id) {
+        try {
+          localStorage.setItem(`takaflow_onboarded_${user.id}`, "true");
+        } catch {}
+      }
       toast.success("Wallets initialized!");
-      navigate("/");
+      navigate("/dashboard");
     } catch (e) {
       toast.error(mapSupabaseError(e));
     }
@@ -174,10 +182,20 @@ export default function Onboarding() {
         <Button
           onClick={handleSubmit}
           disabled={saving}
-          className="w-full mt-8 bg-primary hover:bg-primary/90 text-primary-foreground"
+          className="w-full mt-8 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
         >
           {saving ? "Initializing..." : "Initialize Wallets"}
         </Button>
+
+        <div className="flex justify-center mt-3">
+          <button
+            type="button"
+            onClick={() => navigate("/dashboard")}
+            className="text-xs text-muted-foreground hover:text-foreground hover:underline py-1.5 px-3"
+          >
+            ← Return to Dashboard
+          </button>
+        </div>
       </motion.div>
     </div>
   );

@@ -182,14 +182,14 @@ export default function AppLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col min-h-screen pb-28 md:pb-0">
+      <main className="flex-1 flex flex-col min-h-screen pb-32 md:pb-8">
         <div className="flex-1 p-3.5 sm:p-4 md:p-8 max-w-6xl w-full mx-auto">
           <Outlet />
         </div>
       </main>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-secondary/95 backdrop-blur-lg border-t border-border flex justify-around py-2 z-50">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-secondary/95 backdrop-blur-lg border-t border-border flex justify-around py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-50 shadow-lg">
         {mobileNavItems.map((item) => (
           <Link
             key={item.to}

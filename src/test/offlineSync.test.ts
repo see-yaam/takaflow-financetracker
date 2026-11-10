@@ -7,6 +7,7 @@ import {
   handleOfflineCreateTransaction,
   handleOfflineDeleteTransaction,
   handleOfflineReverseTransaction,
+  isNetworkError,
 } from "@/lib/offlineSync";
 import { QueryClient } from "@tanstack/react-query";
 
@@ -104,5 +105,23 @@ describe("Offline Sync & Outbox Engine", () => {
     // Wallet balance restored
     const cachedWallets = qc.getQueryData<any[]>(["wallets"]);
     expect(cachedWallets![0].balance).toBe(1000);
+  });
+
+  describe("isNetworkError", () => {
+    it("detects mapped supabase network errors", () => {
+      expect(isNetworkError(new Error("Network error. Check your connection and try again."))).toBe(true);
+    });
+
+    it("detects browser fetch failures", () => {
+      expect(isNetworkError(new Error("Failed to fetch"))).toBe(true);
+      expect(isNetworkError(new TypeError("Failed to fetch"))).toBe(true);
+      expect(isNetworkError({ message: "Failed to fetch" })).toBe(true);
+      expect(isNetworkError({ message: "NetworkError when attempting to fetch resource." })).toBe(true);
+    });
+
+    it("does not flag non-network errors", () => {
+      expect(isNetworkError(new Error("This record already exists."))).toBe(false);
+      expect(isNetworkError(new Error("Invalid amount"))).toBe(false);
+    });
   });
 });

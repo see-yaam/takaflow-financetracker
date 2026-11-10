@@ -767,26 +767,31 @@ function extractNote(
 ): string {
   let clean = text;
 
-  // 1. Remove currency symbols and numbers with optional trailing suffixes (e.g. "400 টাকার", "৳1,00,000", "500 taka")
+  // 1. Deduplicate consecutive repeated words from speech glitches (e.g. "salarysalary" or "salary salary")
+  clean = clean
+    .replace(/([a-zA-Z]{3,})(?:\1)+/gi, "$1") // glued repeats like salarysalarysalary -> salary
+    .replace(/\b([a-zA-Z0-9\u0980-\u09FF]+)(?:\s+\1\b)+/gi, "$1"); // spaced repeats like salary salary -> salary
+
+  // 2. Remove currency symbols and numbers with optional trailing suffixes (e.g. "400 টাকার", "৳1,00,000", "500 taka")
   clean = clean
     .replace(/(?:৳|tk\.?|bdt|টাকা|টাকায়|টাকায়|টাকার|taka|takar)?\s*[০-৯0-9,]+(?:\.[০-৯0-9]+)?\s*(?:টাকার|টাকায়|টাকায়|টাকা|taka|takar|tk\.?|bdt|৳)?/gi, " ")
     .replace(/[০-৯0-9]+/g, " ");
 
-  // 2. Remove all mentions of wallets with their inflected locative cases (e.g. বিকাশে, ব্যাংকে, পকেটে, ক্যাশে)
+  // 3. Remove all mentions of wallets with their inflected locative cases (e.g. বিকাশে, ব্যাংকে, পকেটে, ক্যাশে)
   clean = clean.replace(
     /(?:বিকাশ(?:ে|ের|টায়|টা| এ)?|নগদ(?:ে|ের)?|রকেট(?:ে|ের)?|ব্যাংক(?:ে|ের)?|ক্যাশ(?:ে|ের)?|পকেট(?:ে|ের)?|মানিব্যাগ(?:ে|ের)?|bkash|nagad|rocket|bank|cash|pocket|wallet)(?:\s*(?:থেকে|theke|diye|দিয়ে|দিয়ে|এ|e))?/gi,
     " "
   );
 
-  // 3. Remove standalone prepositions left behind
-  clean = clean.replace(/\b(?:theke|diye|e|থেকে|দিয়ে|দিয়ে|দারা|দ্বারা)\b/gi, " ");
+  // 4. Remove standalone prepositions left behind (Bengali and English)
+  clean = clean.replace(/\b(?:theke|diye|e|on|in|at|from|to|for|with|of|থেকে|দিয়ে|দিয়ে|দারা|দ্বারা)\b/gi, " ");
 
-  // 4. If transaction is Income, remove leading redundant intent words (e.g. "ইনকাম ঈদ বোনাস" -> "ঈদ বোনাস")
+  // 5. If transaction is Income, remove leading redundant intent words (e.g. "ইনকাম ঈদ বোনাস" -> "ঈদ বোনাস")
   if (type === "income") {
     clean = clean.replace(/^(?:\s*ইনকাম|\s*আয়|\s*আয়|\s*income)\s+/i, " ");
   }
 
-  // 5. Remove any leftover commas, punctuation, and orphaned Bengali vowel signs/diacritics
+  // 6. Remove any leftover commas, punctuation, and orphaned Bengali vowel signs/diacritics
   clean = clean
     .replace(/(?:^|\s)[\u0981-\u0983\u09BC-\u09CD\u09D7\u09E2\u09E3]+/g, " ")
     // Remove isolated single-letter Bengali genitives or prepositions left dangling (e.g. "র ", "এর ")
@@ -796,8 +801,14 @@ function extractNote(
     .replace(/\s+/g, " ")
     .trim();
 
-  // If text is too short or empty, default to category name
-  if (clean.length < 2) {
+  // Deduplicate consecutive repeated words again after wallet, amount, and preposition stripping
+  clean = clean
+    .replace(/([a-zA-Z]{3,})(?:\1)+/gi, "$1")
+    .replace(/\b([a-zA-Z0-9\u0980-\u09FF]+)(?:\s+\1\b)+/gi, "$1")
+    .trim();
+
+  // 7. If text is empty or reduced to trivial prepositions/length, fall back to Category name
+  if (clean.length < 2 || /^(?:on|in|at|from|to|for|theke|diye|e|র|এর)$/i.test(clean)) {
     return category;
   }
 

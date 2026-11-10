@@ -25,5 +25,12 @@ public class MainActivity extends BridgeActivity {
                 PERMISSION_REQUEST_RECORD_AUDIO
             );
         }
+
+        // Disable scrollbars on Android WebView for a 100% native look
+        if (this.bridge != null && this.bridge.getWebView() != null) {
+            this.bridge.getWebView().setVerticalScrollBarEnabled(false);
+            this.bridge.getWebView().setHorizontalScrollBarEnabled(false);
+            this.bridge.getWebView().setOverScrollMode(android.view.View.OVER_SCROLL_NEVER);
+        }
     }
 }

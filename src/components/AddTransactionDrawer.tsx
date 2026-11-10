@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { useWallets } from "@/hooks/useWallets";
+import { useWallets, useCreateWallet } from "@/hooks/useWallets";
 import { useCreateTransaction } from "@/hooks/useTransactions";
 import { useCreateRecurring } from "@/hooks/useRecurringTransactions";
 import { toast } from "sonner";
@@ -31,6 +31,7 @@ interface Props {
 
 export default function AddTransactionDrawer({ open, onOpenChange, defaultType = "expense", defaultDate }: Props) {
   const { data: wallets } = useWallets();
+  const createWallet = useCreateWallet();
   const createTx = useCreateTransaction();
   const createRecurring = useCreateRecurring();
   const [type, setType] = useState<"income" | "expense">(defaultType);
@@ -42,7 +43,17 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   const [recurring, setRecurring] = useState(false);
   const [insufficientOpen, setInsufficientOpen] = useState(false);
   const [insufficientData, setInsufficientData] = useState<AttemptedExpense | null>(null);
+  const [quickAddWalletOpen, setQuickAddWalletOpen] = useState(false);
+  const [quickWalletName, setQuickWalletName] = useState("");
 
+  // Ensure default wallet is set whenever wallets load
+  useEffect(() => {
+    if (wallets && wallets.length > 0) {
+      if (!walletId || !wallets.some((w) => w.id === walletId)) {
+        setWalletId(wallets[0].id);
+      }
+    }
+  }, [wallets, walletId]);
 
   useEffect(() => {
     if (open) {
@@ -53,8 +64,26 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
       setNote("");
       setDate(defaultDate || format(new Date(), "yyyy-MM-dd"));
       setRecurring(false);
+      setQuickAddWalletOpen(false);
+      setQuickWalletName("");
     }
   }, [open, defaultType, defaultDate, wallets]);
+
+  const handleQuickAddWallet = async () => {
+    const name = quickWalletName.trim();
+    if (!name) return;
+    try {
+      const newW = await createWallet.mutateAsync({ name, balance: 0 });
+      if (newW?.id) {
+        setWalletId(newW.id);
+      }
+      setQuickWalletName("");
+      setQuickAddWalletOpen(false);
+      toast.success(`Wallet "${name}" created!`);
+    } catch (e) {
+      toast.error(mapSupabaseError(e));
+    }
+  };
 
   const handleSubmit = async () => {
     if (!category.trim()) {
@@ -203,19 +232,75 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
             </div>
 
             <div className="space-y-1.5">
-              <Label className="text-xs font-medium text-muted-foreground">Wallet</Label>
-              <Select value={walletId} onValueChange={setWalletId}>
-                <SelectTrigger className="bg-secondary/60 border-border h-10 text-xs">
-                  <SelectValue placeholder="Select wallet" />
-                </SelectTrigger>
-                <SelectContent className="bg-popover border-border">
-                  {wallets?.map((w) => (
-                    <SelectItem key={w.id} value={w.id} className="text-xs">
-                      {w.name}
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-medium text-muted-foreground">Wallet</Label>
+                <button
+                  type="button"
+                  onClick={() => setQuickAddWalletOpen((prev) => !prev)}
+                  className="text-[11px] text-primary hover:underline font-medium"
+                >
+                  {quickAddWalletOpen ? "Cancel" : "+ New"}
+                </button>
+              </div>
+
+              {quickAddWalletOpen ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="text"
+                    placeholder="Wallet name (e.g. Cash, bKash)"
+                    value={quickWalletName}
+                    onChange={(e) => setQuickWalletName(e.target.value)}
+                    className="h-10 text-xs bg-secondary/60 border-border"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleQuickAddWallet();
+                      }
+                    }}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    onClick={handleQuickAddWallet}
+                    disabled={!quickWalletName.trim() || createWallet.isPending}
+                    className="h-10 text-xs shrink-0 px-3"
+                  >
+                    Add
+                  </Button>
+                </div>
+              ) : (
+                <Select
+                  value={walletId || (wallets?.[0]?.id ?? "")}
+                  onValueChange={(val) => {
+                    if (val === "__create_new__") {
+                      setQuickAddWalletOpen(true);
+                      return;
+                    }
+                    setWalletId(val);
+                  }}
+                >
+                  <SelectTrigger className="bg-secondary/60 border-border h-10 text-xs">
+                    <SelectValue placeholder={wallets && wallets.length > 0 ? "Select wallet" : "Creating default wallet..."} />
+                  </SelectTrigger>
+                  <SelectContent className="bg-popover border-border z-[100]">
+                    {wallets && wallets.length > 0 ? (
+                      wallets.map((w) => (
+                        <SelectItem key={w.id} value={w.id} className="text-xs">
+                          {w.name}
+                        </SelectItem>
+                      ))
+                    ) : (
+                      <SelectItem value="__none__" disabled className="text-xs text-muted-foreground">
+                        No wallets found
+                      </SelectItem>
+                    )}
+                    <SelectItem value="__create_new__" className="text-xs text-primary font-semibold border-t border-border/40 mt-1 cursor-pointer">
+                      + Create New Wallet
                     </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </div>
 

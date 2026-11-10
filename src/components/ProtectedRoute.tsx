@@ -6,19 +6,9 @@ import { useWallets } from "@/hooks/useWallets";
 export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const location = useLocation();
-  const { data: wallets, isLoading: walletsLoading } = useWallets();
-  const [walletWaitTimeout, setWalletWaitTimeout] = useState(false);
+  const { data: wallets, isLoading: walletsLoading, isError: walletsError } = useWallets();
 
-  useEffect(() => {
-    if (user && walletsLoading) {
-      const timer = setTimeout(() => {
-        setWalletWaitTimeout(true);
-      }, 2500);
-      return () => clearTimeout(timer);
-    }
-  }, [user, walletsLoading]);
-
-  if (loading || (user && walletsLoading && !walletWaitTimeout)) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-muted-foreground animate-pulse text-lg">Loading vault...</div>
@@ -31,15 +21,24 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }
 
   const isOnboarding = location.pathname === "/onboarding";
-  const hasWallets = wallets && wallets.length > 0;
+  const isMarkedOnboarded = typeof window !== "undefined" && localStorage.getItem(`takaflow_onboarded_${user.id}`) === "true";
+  const hasWallets = Array.isArray(wallets) && wallets.length > 0;
 
-  // No wallets → force onboarding (unless already there)
-  if (!hasWallets && !isOnboarding) {
+  // Mark onboarded if wallets ever loaded successfully
+  if (hasWallets && !isMarkedOnboarded && typeof window !== "undefined") {
+    try {
+      localStorage.setItem(`takaflow_onboarded_${user.id}`, "true");
+    } catch {}
+  }
+
+  // Only redirect to onboarding if wallets definitively finished loading without error and returned 0 wallets
+  // NEVER redirect during network lag, timeout, error, or if already marked onboarded!
+  if (!isMarkedOnboarded && !walletsLoading && !walletsError && Array.isArray(wallets) && wallets.length === 0 && !isOnboarding) {
     return <Navigate to="/onboarding" replace />;
   }
 
-  // Has wallets → skip onboarding, go to dashboard
-  if (hasWallets && isOnboarding) {
+  // If already has wallets or onboarded, skip onboarding and return to dashboard
+  if ((hasWallets || isMarkedOnboarded) && isOnboarding) {
     return <Navigate to="/dashboard" replace />;
   }
 

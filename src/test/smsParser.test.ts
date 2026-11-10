@@ -131,6 +131,27 @@ describe("Universal Bangladesh SMS Parser", () => {
     expect(result?.categorySuggestion).toBe("Transport");
   });
 
+  it("parses Bengali text bKash received money (income) with Bengali numerals", () => {
+    const sms = "আপনি ৫০০.০০ টাকা পেয়েছেন। ব্যালেন্স: ১,২০০.০০ টাকা। TrxID: 9A7BC12D.";
+    const result = parseBangladeshFinancialSms(sms, "bKash");
+    expect(result).not.toBeNull();
+    expect(result?.source).toBe("bKash");
+    expect(result?.type).toBe("income");
+    expect(result?.amount).toBe(500.0);
+    expect(result?.balance).toBe(1200.0);
+    expect(result?.trxId).toBe("9A7BC12D");
+  });
+
+  it("parses Bengali text Nagad cash out / send money (expense) with Bengali numerals", () => {
+    const sms = "৫০.০০ টাকা পাঠানো সফল হয়েছে। আপনার ব্যালেন্স ৯৫০.০০ টাকা। TrxID 7B33DD99.";
+    const result = parseBangladeshFinancialSms(sms, "নগদ");
+    expect(result).not.toBeNull();
+    expect(result?.source).toBe("Nagad");
+    expect(result?.type).toBe("expense");
+    expect(result?.amount).toBe(50.0);
+    expect(result?.balance).toBe(950.0);
+  });
+
   it("returns null for non-financial SMS (spam / telecom)", () => {
     const sms = "Dear customer, recharge 29 Tk to get 1GB internet for 3 days. Dial *121*... ";
     // This has no debit/credit/payment context or balance, but let's check

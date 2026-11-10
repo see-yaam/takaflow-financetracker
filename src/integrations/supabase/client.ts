@@ -10,6 +10,7 @@ const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
+    storageKey: `sb-${import.meta.env.VITE_SUPABASE_PROJECT_ID || "rnzofkinmetxedimdbdv"}-auth-token`,
     storage: localStorage,
     persistSession: true,
     autoRefreshToken: true,

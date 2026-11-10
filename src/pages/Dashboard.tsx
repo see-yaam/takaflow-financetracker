@@ -38,6 +38,8 @@ import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { cn, formatMoney } from "@/lib/utils";
 
+import { useAuth } from "@/contexts/AuthContext";
+
 const iconMap: Record<string, React.ElementType> = {
   smartphone: Smartphone,
   bank: Landmark,
@@ -46,6 +48,7 @@ const iconMap: Record<string, React.ElementType> = {
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const { data: wallets, isLoading: wLoading } = useWallets();
   const { data: rates } = useCurrencyRates();
   const { data: debts } = useDebts();
@@ -108,31 +111,22 @@ export default function Dashboard() {
     applyRecurring.mutate();
   }, []); // eslint-disable-line
 
-  if (wLoading) {
-    return <div className="flex items-center justify-center h-64 text-muted-foreground animate-pulse">Loading...</div>;
-  }
+  useEffect(() => {
+    if (user?.id && wallets && wallets.length > 0) {
+      try {
+        localStorage.setItem(`takaflow_onboarded_${user.id}`, "true");
+      } catch {}
+    }
+  }, [user?.id, wallets]);
 
-  if (wallets && wallets.length === 0) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center p-6 space-y-4">
-        <div className="p-4 rounded-full bg-primary/10 text-primary">
-          <Wallet className="h-10 w-10" />
-        </div>
-        <h2 className="text-xl font-semibold">No Wallets Found</h2>
-        <p className="text-muted-foreground max-w-sm">
-          You don't have any wallets set up yet. Create a wallet to start tracking your income and expenses.
-        </p>
-        <Button onClick={() => navigate("/onboarding")} className="mt-2">
-          <Plus className="h-4 w-4 mr-2" /> Add a Wallet
-        </Button>
-      </div>
-    );
-  }
+  // Never block the user with full-page loading skeletons
 
-  const totalBalance = wallets?.reduce((s, w) => {
+  const displayWallets = wallets || [];
+
+  const totalBalance = displayWallets.reduce((s, w) => {
     const currency = (w as any).currency || "BDT";
     return s + convertToBDT(Number(w.balance), currency, rates);
-  }, 0) || 0;
+  }, 0);
 
   const activeTx = transactions?.filter((t: any) => !t.is_reversed) || [];
   const monthIncome = activeTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
@@ -203,19 +197,57 @@ export default function Dashboard() {
         </h2>
       </motion.div>
 
+      {/* Mobile Quick Action Buttons: One-tap instant access without scrolling */}
+      <div className="grid grid-cols-3 gap-2.5 sm:hidden">
+        <button
+          type="button"
+          onClick={() => openDrawer("income")}
+          className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 active:scale-95 transition-all text-emerald-400 font-semibold text-xs shadow-sm hover:bg-emerald-500/15"
+        >
+          <span className="h-8 w-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <Plus className="h-4 w-4" />
+          </span>
+          <span>+ Income</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => openDrawer("expense")}
+          className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl bg-rose-500/10 border border-rose-500/20 active:scale-95 transition-all text-rose-400 font-semibold text-xs shadow-sm hover:bg-rose-500/15"
+        >
+          <span className="h-8 w-8 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-400">
+            <TrendingDown className="h-4 w-4" />
+          </span>
+          <span>- Expense</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => setVoiceOpen(true)}
+          className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl bg-primary/10 border border-primary/25 active:scale-95 transition-all text-primary font-semibold text-xs shadow-sm hover:bg-primary/15"
+        >
+          <span className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
+            <Mic className="h-4 w-4" />
+          </span>
+          <span>Voice Add</span>
+        </button>
+      </div>
+
       {/* Wallet Carousel Header */}
       <div className="flex items-center justify-between -mb-1">
         <p className="wallet-label text-[11px] sm:text-xs font-semibold text-muted-foreground tracking-wider">
-          Wallets ({wallets?.length || 0})
+          Wallets ({displayWallets.length})
         </p>
-        <span className="text-[11px] text-muted-foreground/70 sm:hidden">
-          Swipe ➔
-        </span>
+        <button
+          type="button"
+          onClick={() => navigate("/settings")}
+          className="text-[11px] text-primary hover:underline font-medium"
+        >
+          Manage ➔
+        </button>
       </div>
 
       {/* Wallet cards: Horizontal Carousel on mobile, Grid on desktop */}
       <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-3 overflow-x-auto sm:overflow-visible pb-2 sm:pb-0 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory no-scrollbar">
-        {wallets?.map((w, i) => {
+        {displayWallets.map((w, i) => {
           const Icon = iconMap[w.icon || "wallet"] || Wallet;
           const currency = (w as any).currency || "BDT";
           const bdtEquiv = convertToBDT(Number(w.balance), currency, rates);
@@ -269,6 +301,19 @@ export default function Dashboard() {
             </motion.div>
           );
         })}
+
+        {/* Add Wallet card in carousel for mobile ease */}
+        <button
+          type="button"
+          onClick={() => navigate("/settings")}
+          className="vault-card p-4 sm:p-5 flex flex-col items-center justify-center text-center border-dashed border-border/80 hover:border-primary/50 text-muted-foreground hover:text-primary transition-all w-[45vw] min-w-[150px] max-w-[180px] sm:w-auto sm:min-w-0 sm:max-w-none shrink-0 snap-start active:scale-95"
+        >
+          <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1.5">
+            <Plus className="h-5 w-5" />
+          </div>
+          <span className="text-xs font-semibold text-foreground">Add Wallet</span>
+          <span className="text-[10px] text-muted-foreground">bKash, Bank, Cash</span>
+        </button>
       </div>
 
       {/* Debt summary widget */}
@@ -359,46 +404,61 @@ export default function Dashboard() {
       </div>
 
       {/* Recent transactions */}
-      <div className="vault-card p-5">
-        <h3 className="wallet-label mb-4">Recent Transactions</h3>
+      <div className="vault-card p-4 sm:p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="wallet-label">Recent Transactions</h3>
+          {transactions && transactions.length > 0 && (
+            <button
+              type="button"
+              onClick={() => navigate("/calendar")}
+              className="text-xs text-primary font-medium hover:underline flex items-center gap-1"
+            >
+              View Calendar ➔
+            </button>
+          )}
+        </div>
         {!transactions?.length ? (
-          <p className="text-sm text-muted-foreground">No transactions yet. Start tracking your spending.</p>
+          <p className="text-sm text-muted-foreground py-3">No transactions yet. Start tracking your spending.</p>
         ) : (
           <div className="space-y-0">
             {transactions.slice(0, 10).map((t: any) => {
               const isReversed = t.is_reversed;
               return (
-                <div key={t.id} className={`transaction-row ${isReversed ? "opacity-50" : ""}`}>
-                  <div className="flex items-center gap-3">
-                    <div className={`h-8 w-8 rounded-lg flex items-center justify-center text-xs font-bold ${t.type === "income" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
+                <div key={t.id} className={`transaction-row py-3 sm:py-3.5 ${isReversed ? "opacity-50" : ""}`}>
+                  <div className="flex items-center gap-3 min-w-0 flex-1 pr-2">
+                    <div className={`h-8 w-8 sm:h-9 sm:w-9 rounded-xl flex items-center justify-center text-xs font-bold shrink-0 ${t.type === "income" ? "bg-primary/15 text-primary" : "bg-destructive/15 text-destructive"}`}>
                       {t.type === "income" ? "+" : "-"}
                     </div>
-                    <div>
-                      <p className={`text-sm font-medium text-foreground ${isReversed ? "line-through" : ""}`}>
+                    <div className="min-w-0 flex-1">
+                      <p className={`text-sm font-medium text-foreground truncate ${isReversed ? "line-through" : ""}`}>
                         {t.category}
-                        {isReversed && <span className="ml-2 text-[10px] bg-destructive/15 text-destructive px-1.5 py-0.5 rounded no-underline inline-block">Reversed</span>}
+                        {isReversed && <span className="ml-1.5 text-[10px] bg-destructive/15 text-destructive px-1.5 py-0.2 rounded no-underline inline-block">Reversed</span>}
                       </p>
-                      <p className="text-xs text-muted-foreground">{t.note || (t as any).wallets?.name} · {format(new Date(t.date), "MMM d")}</p>
+                      <p className="text-xs text-muted-foreground truncate">{t.note || (t as any).wallets?.name} · {format(new Date(t.date), "MMM d")}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className={`text-sm font-medium tabular-nums ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
+                  <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+                    <span className={`text-sm font-semibold tabular-nums ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
                       {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </span>
                     {!isReversed && (
                       <button
+                        type="button"
                         onClick={() => setEditTarget(t)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        className="p-1.5 sm:p-2 rounded-lg text-muted-foreground hover:text-primary active:bg-primary/15 transition-colors touch-manipulation"
                         title="Edit category"
+                        aria-label="Edit category"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                     )}
                     {!isReversed && (
                       <button
+                        type="button"
                         onClick={() => setReverseTarget(t)}
-                        className="p-1.5 rounded-md text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                        className="p-1.5 sm:p-2 rounded-lg text-muted-foreground hover:text-destructive active:bg-destructive/15 transition-colors touch-manipulation"
                         title="Reverse"
+                        aria-label="Reverse transaction"
                       >
                         <Undo2 className="h-3.5 w-3.5" />
                       </button>

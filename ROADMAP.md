@@ -1,7 +1,8 @@
 # 🗺️ TakaFlow — Product Roadmap & Feature Brainstorm
 
-> **Document Version:** 1.0.0  
-> **Status:** Active Roadmap & Planning
+> **Document Version:** 1.1.0 (Synced 2026-11-10)  
+> **Status:** Active Product Backlog  
+> **Developer Execution Plan & Critical Fixes:** See [**`TARGETS.md`**](TARGETS.md) & [**`DIFFICULTIES.md`**](DIFFICULTIES.md) for prioritized bug fixes (`P0`/`P1`) before building new product features below. Full current-state technical specs live in [**`DOCUMENTATION.md`**](DOCUMENTATION.md).
 
 ---
 
@@ -11,20 +12,24 @@
 
 ---
 
-## 📊 Current System Audit (What Exists Today)
+## 📊 Current System Audit (What Exists Today — Verified `v1.0.7+`)
 
-| Module | Core Features Implemented | Current State |
+| Module | Core Features Implemented | Current State & Caveats |
 | :--- | :--- | :--- |
-| **Authentication** | Email & Password, 6-digit OTP verification, secure password reset, friendly error mapping | ✅ Complete & Polished |
-| **Profile & Security** | User display name, avatar updates, secure email change with verification, password change with old password validation | ✅ Complete |
-| **Dashboard** | Total balance in ৳ (with multi-currency conversion), individual wallet cards, active month income/expense/net summary, recent transactions list, quick add drawer | ✅ Functional |
-| **Wallets & Accounts** | Multi-wallet support (Cash, Bank, Mobile Financial Services), currency support (BDT, USD, EUR, etc.), balance adjustment, transfer between wallets | ✅ Functional |
-| **Transaction Engine** | Income & Expense logging, custom categories, note attachments, one-click transaction reversal (undo balance update), recurring transaction scheduler | ✅ Functional |
-| **Budgeting** | Monthly budget setting, visual progress bar, traffic light alerts (safe, warning, danger) | ✅ Functional |
-| **Savings Goals** | Goal target amount, deadline tracking, current saved amount, progress indicators | ✅ Functional |
-| **Debts & Loans** | Lend (owed to you) vs. Borrow (you owe), partial settlement, due dates, settlement status | ✅ Functional |
-| **Analytics & AI** | Monthly snapshots, income vs. expense breakdown, category charts, AI insights via Supabase Edge Function | ✅ Functional |
+| **Authentication** | Email & Password, 6-digit OTP verification, custom token password reset (`Resend`), friendly error mapping | ⚠️ Functional — `send-reset-email` & `verify-reset-token` have a `>50` users `listUsers()` bug + sandbox sender ([`DIFFICULTIES.md`](DIFFICULTIES.md#24-password-reset-edge-functions-fail-above-50-users-lack-rate-limiting--use-sandbox-sender)) |
+| **Profile & Security** | Display name, Facebook-style pan/zoom/rotate circular avatar cropper with iPhone HEIC conversion, OTP email change, password verify, Account Reset | ⚠️ Functional — Avatars stored as base64 in `user_metadata` JWT; Reset misses `custom_categories` |
+| **Dashboard** | Hero Net Worth in ৳ (with `BDT`/`USD`/`EUR`/`GBP` live FX), **Spy Privacy Mode** (hold-to-peek + haptic), mobile horizontal wallet carousel, quick action grid, active month summary, recent 10 tx | ⚠️ Functional — Recent row formatting hardcodes `৳` on some displays |
+| **Voice AI Assistant** | Press-and-hold Walkie-Talkie / Tap mic (`bn-BD`/`en-US`), Bengali/Banglish deterministic parser + Gemini AI fallback, auto wallet/category matching | ⚠️ Implemented — Client Gemini fallback exposes `VITE_GEMINI_API_KEY` if configured; move to server-only proxy |
+| **BD SMS & Push Auto-Tracker** | Android `SmsReceiver` + `TakaFlowNotificationListener` + Anti-Scam personal number shield + `smsParser.ts` (bKash/Nagad/Rocket/Cellfin/Banks) | ⚠️ Partial / Fragile — Native queue clears before JS commit; NotificationListener bypasses personal number filter ([`DIFFICULTIES.md`](DIFFICULTIES.md#23-takaflownotificationlistener-bypasses-anti-scam-shield--defaults-unknown-senders-to-bkash)); no manual SMS paste box in Web UI yet |
+| **Offline-First & Outbox** | Permanent TanStack Query cache (`TAKAPERSIST_CACHE_V1`) + Outbox queue (`TAKAPERSIST_OUTBOX_V1`) for Wallets/Transactions | 🚨 Needs P0 Repair — Outbox can silently discard unsynced items via `OfflineSyncBadge`, `SignOut`, or constraint drops; `updateWallet`/Debts/Goals/Transfers lack offline queue |
+| **Wallets & Accounts** | Multi-wallet support (Cash, Bank, MFS), currencies (`BDT`, `USD`, `EUR`, `GBP`), inline `+ New` quick wallet in Add Drawer, balance rename/delete, inter-wallet transfers | ⚠️ Functional — Transfers are non-atomic and ignore cross-currency FX conversion |
+| **Transaction Engine** | Income & Expense logging, custom emoji categories (`custom_categories` + reorder), inline category edit, one-click reversal, Shortage Rescue (`InsufficientBalanceModal`), recurring rules | ⚠️ Functional — Missing `day_of_month` catch-up if app wasn't opened on exact due date |
+| **Budgeting & Goals** | Monthly budget (`BudgetTrafficLight`), savings goals with opening balance wizard, optional wallet debit contributions, surplus ETA projection, confetti | ⚠️ Functional — `useAddToGoal` is non-atomic; `GoalsPage` net savings includes reversed tx |
+| **Debts & Loans** | Borrowed vs. Lent, `debt_payments` partial repayment history + overpayment handling, `debt_additions` top-up loans + trigger, settlement state | ⚠️ Functional — Client mutations across `debts` + `transactions` are non-atomic |
+| **Analytics & AI** | Monthly snapshots (`useMonthRollover`), Recharts breakdown, `MoneyFlowChart`, `AIInsights` via Supabase Edge Function | ⚠️ Rollover math bug — `useMonthRollover` uses current balance & ignores `is_reversed` |
 | **Calendar View** | Daily transaction overview, calendar heatmap, date-specific transaction drill-down | ✅ Functional |
+| **Android APK Auto-Updater** | GitHub Releases checker modal with Bengali feature cards + `DownloadManager` + `FileProvider` self-installer | ⚠️ Works for Direct APK — Blocked on Google Play without flavors; CI tag `v1.0.7` is hardcoded |
+| **Habit Streaks (`useStreaks`)** | `useStreaks` hook & `StreakBadge` component implemented in `src/` | 💤 Dead / Unwired — Not imported anywhere in UI yet |
 
 ---
 
@@ -32,148 +37,77 @@
 
 These are the key differentiators that make TakaFlow uniquely valuable compared to generic trackers:
 
-### 1. 📱 MFS SMS & Text Quick-Parser (bKash / Nagad / Rocket)
-* **The Problem:** 80%+ of daily micro-expenses in Bangladesh happen via bKash, Nagad, or bank card SMS. Manually typing every ৳30 rickshaw fee or ৳350 grocery bill leads to tracker fatigue.
-* **The Solution:** 
-  - A **"Paste SMS / Trx Message"** field inside the Add Drawer.
-  - Regex & NLP parser that automatically detects:
-    - **Amount** (e.g., `Tk 450.00`)
-    - **Platform / Wallet** (e.g., `bKash`, `Nagad`, `City Bank`)
-    - **Transaction Type** (Cash Out = Expense, Received = Income, Send Money = Transfer/Expense)
-    - **Counterparty / Reference** (e.g., `Merchant: Shawarma House`)
-  - One-tap "Confirm & Log" saves 90% of user typing time.
+### 1. 📱 MFS SMS & Text Quick-Parser (bKash / Nagad / Rocket) — _Engine Built, Manual Paste Pending_
+* **Status:** Core parser (`src/lib/smsParser.ts`) and Android background auto-capture (`SmsReceiver.java` + `TakaFlowNotificationListener.java`) are **already implemented**.
+* **Remaining Scope (`TKF-01`):**
+  - Add a collapsible **"Paste SMS / Trx Message"** field inside `AddTransactionDrawer.tsx` so Web, iOS, and manual users get the same 1-tap regex extraction (`Amount`, `bKash/Nagad/Bank`, `Income/Expense`, `TrxID`, `Counterparty`).
 
 ### 2. 🤝 Friendly Debt Reminders (WhatsApp & SMS Template Generator)
 * **The Problem:** Asking friends or relatives for lent money (`"Taka ta kobe dibi?"`) is socially awkward and frequently forgotten.
 * **The Solution:**
-  - On the **Debts** page, add a **"Send Friendly Reminder"** button next to lent records.
-  - Automatically generates a polite, customizable message with a direct WhatsApp share link:
-    > *"Hey [Name]! Gentle reminder regarding the ৳[Amount] for [Reason] from last week. Whenever convenient, you can bKash/Nagad me at [User Mobile Number]. Thanks!"*
-  - Includes user bKash/Nagad number or payment details.
+  - On the **Debts** page (`DebtsPage.tsx`), add a **"Send Friendly Reminder"** button next to lent records.
+  - Automatically generates a polite, customizable message with a direct WhatsApp (`wa.me`) deep link:
+    > *"Hey [Name]! Gentle reminder regarding the ৳[Amount] for [Reason]. Whenever convenient, you can bKash/Nagad me at [User Mobile Number]. Thanks!"*
 
 ### 3. 🕌 Zakat Calculator (যাকাত ক্যালকুলেটর)
 * **The Problem:** Muslims in Bangladesh calculate Zakat every Ramadan, requiring complex manual calculation across cash, bank balances, gold, business stock, and debts.
 * **The Solution:**
-  - One-click Zakat tab that aggregates:
-    - Total liquid cash across all wallets.
-    - Active lent money (recoverable receivables).
-    - Deducts immediate payable debts.
-    - Compares net total with live/configurable Nisab threshold (Silver/Gold standard).
-    - Shows exact 2.5% Zakat amount due with breakdown export.
+  - One-click Zakat tab/modal that aggregates liquid cash across wallets + recoverable active lent receivables minus immediate payable debts, compares against configurable Silver/Gold Nisab threshold, and calculates the exact 2.5% Zakat due.
 
-### 4. ⚡ 1-Tap Quick Action Presets (Smart Micro-Expenses)
-* **The Problem:** Logging small repetitive expenses (Tea, Rickshaw, Lunch, Snacks) takes too many clicks.
+### 4. ⚡ 1-Tap Quick Action Presets (Smart Micro-Expenses) + Cash-Out Fee Helper
+* **The Problem:** Logging small repetitive expenses (Tea, Rickshaw, Lunch, Snacks) or bKash/Nagad cash-out charges (`+1.49%` / `+1.85%`) takes extra taps.
 * **The Solution:**
-  - Customizable quick-log pill buttons on the Dashboard:
-    - `[ ৳30 Rickshaw ]` `[ ৳50 Chai & Snacks ]` `[ ৳150 Lunch ]` `[ ৳500 Bazar ]`
-  - Clicking any pill immediately logs the transaction to the default cash wallet with 0 typing required.
+  - Customizable quick-log pill buttons on the Dashboard (`[ ৳30 Rickshaw ]`, `[ ৳50 Chai & Snacks ]`, `[ ৳150 Lunch ]`) + 1-tap **Cash-Out Fee** toggle inside `AddTransactionDrawer.tsx`.
 
 ---
 
 ## ⚡ Tier 2: 10x User-Friendliness & Speed (UI/UX)
 
 ### 1. ⌨️ Global Command Palette (`Ctrl+K` / `Cmd+K`)
-* Power users can hit `Cmd+K` anywhere:
-  - `"Add 250 food"` -> parses and creates transaction instantly.
-  - `"Go to Debts"`, `"Go to Goals"`, `"Switch to Dark Mode"`.
-  - Search any past transaction by note, category, or amount.
+* Wire the already-installed `cmdk` package so desktop/power users can hit `Cmd+K` anywhere (`"Add 250 food"`, `"Go to Debts"`, search past transactions).
 
 ### 2. 🧠 Smart Category Autocomplete & Prediction
-* When the user types in the Note field:
-  - If typing `"Star Kabab"` or `"burger"` -> automatically selects category **Food & Dining**.
-  - If typing `"pathao"`, `"uber"`, `"cng"` -> selects **Transport**.
-  - If typing `"daraz"` -> selects **Shopping**.
-  - Saves the user from having to click and browse the category dropdown.
+* Note-to-category keyword suggestion inside `AddTransactionDrawer.tsx` (Voice & SMS parsers already contain rich BD keyword dictionaries that can be shared with manual note input).
 
-### 3. 📲 PWA (Progressive Web App) + Offline First Logging
-* Full `manifest.json` and Service Worker setup.
-* Allows user to "Install TakaFlow" on Android & iOS home screens.
-* **Offline Logging:** Transactions created without internet are saved in IndexedDB / LocalStorage queue and auto-synced to Supabase as soon as connection is restored. No more lost logs inside basements or while on the move.
+### 3. 📲 Full PWA (Progressive Web App) Shell + Hardened Offline Sync
+* `localStorage` Outbox + TanStack Query permanence are already wired (`src/lib/offlineSync.ts`), **pending P0 stabilization** in [`TARGETS.md`](TARGETS.md).
+* Next step (`TKF-06`): Add `vite-plugin-pwa`, Web App Manifest, and Service Worker so pure browser / iOS users can install and boot TakaFlow offline without native Android assets.
 
-### 4. 🗂️ Full Transactions List with Advanced Filtering
-* Currently, Dashboard only displays the 10 most recent transactions.
-* Add a dedicated **Transactions** view with:
-  - Instant text search across notes and categories.
-  - Date range picker (This Week, This Month, Custom Range).
-  - Wallet filter & Category multi-select filter.
-  - Bulk actions (Export selected, Bulk delete, Bulk categorize).
+### 4. 🗂️ Full Transactions List with Advanced Filtering (`TKF-02`)
+* Currently, Dashboard only displays the 10 most recent transactions of the active month.
+* Add a dedicated **`/transactions`** route with instant text search, date range picker, wallet/category multi-select filters, bulk actions, and CSV export.
 
 ---
 
 ## 🎯 Tier 3: Gamification, Habit Retention & Delight
 
-### 1. 🔥 Tracking Streaks & Habit Badges
-* Visual streak counter on the header (e.g., `🔥 12-Day Streak`).
-* Badges for milestones:
-  - *"Week One Master"* (Logged expenses 7 days in a row)
-  - *"Budget Guardian"* (Stayed under monthly budget for 3 consecutive months)
-  - *"Debt Crusher"* (Settled 5 debts)
-* Micro-haptic animations (confetti or glowing ring) when achieving a savings goal.
-
-### 2. 🛡️ Vault Financial Health Score (0 - 100)
-* Combines:
-  - Savings Rate (Income vs. Expense ratio)
-  - Budget Adherence (Remaining under budget)
-  - Debt-to-Income safety margin
-  - Emergency Fund coverage (total balance / average monthly spend)
-* Visual speedometer gauge giving users clear gamified feedback on whether their financial health is *Vulnerable*, *Balanced*, or *Elite*.
-
-### 3. 📉 Burn Rate & Runway Projection
-* Real-time calculation on Dashboard:
-  - *"At your current spend of ৳620/day, your budget will exhaust on day 24."*
-  - *"Safe daily allowance for remaining 10 days: ৳450/day."*
-  - Prevents month-end financial crisis before it happens.
+1. **🔥 Tracking Streaks & Habit Badges**: `useStreaks.ts` & `StreakBadge.tsx` already exist cleanly — wire them into `Dashboard` / `ProfilePage` after fixing `!is_reversed` filtering.
+2. **🛡️ Vault Financial Health Score (0 - 100)**: Combines savings rate, budget adherence, debt ratio, and emergency fund runway.
+3. **📉 Burn Rate & Runway Projection**: Live Dashboard daily safe-spend indicator (`remainingBudget / daysLeft`).
 
 ---
 
-## 🛠️ Tier 4: Existing Feature Polish (Optimization Opportunities)
+## 🛠️ Tier 4: Existing Feature Polish & Data Integrity Upgrades
 
-| Feature | Current Limitation | Proposed Polish |
+| Feature | Current Limitation | Target Fix |
 | :--- | :--- | :--- |
-| **Add Transaction Drawer** | Category dropdown requires typing or scrolling generic list | Show 4 most frequent categories as quick buttons on top of dropdown |
-| **Debts Page** | Shows remaining amount but no history of partial repayments | Add expandable transaction sub-log showing partial payments with timestamps |
-| **Goals Page** | User must manually calculate and track goal funds | Add a direct "Deposit from Wallet" button that debits a selected wallet and credits the goal |
-| **Reports Page** | Fixed monthly view | Add Quarter-over-Quarter and Year-over-Year comparison charts |
-| **Data Export** | No native export mechanism | Add one-click CSV and formatted PDF statement export |
-| **Receipts** | Text notes only | Add receipt image attachment (stored in Supabase Storage bucket) |
+| **Offline Sync Badge & Queue** | Auto-clears on timeout/error, missing dead-letter recovery & several mutation types | **P0** fix in [`TARGETS.md`](TARGETS.md) |
+| **Wallet Transfers / Debt / Goal Writes** | Non-atomic sequential client REST calls + no cross-currency FX conversion | **P1** Postgres RPCs (`transfer_wallet_funds`, `record_debt_payment`, `contribute_savings_goal`) |
+| **Add Transaction Drawer** | Resets typed form if `wallets` refetches mid-edit; category picker requires opening modal | Fix `useEffect` deps (`P0`) + surface top 4 frequent categories |
+| **Debts Page** | Already has partial payments (`debt_payments`) + additions (`debt_additions`) history | Make payment + debt update + wallet transaction atomic via RPC + add WhatsApp reminders |
+| **Data Export** | No native CSV/PDF export mechanism | Add filtered CSV export in `/transactions` (`TKF-02`) and PDF statement export |
+| **Receipts & Avatars** | Text notes only; avatars stored as base64 in Auth `user_metadata` JWT | Migrate avatars to Supabase Storage + add Gemini Vision receipt OCR |
+| **Android Distribution** | Direct APK permissions (`RECEIVE_SMS`, `REQUEST_INSTALL_PACKAGES`) blocked on Google Play | Split Gradle build flavors (`directApk` vs `playStore`) |
 
 ---
 
-## 🗓️ Phase-by-Phase Execution Roadmap
+## 💡 Quick Reference: Product Backlog (`TKF-*` IDs)
 
-```mermaid
-gantt
-    title TakaFlow Feature Implementation Roadmap
-    dateFormat  YYYY-MM-DD
-    section Phase 1: Core UX & Speed
-    PWA Offline Support & Mobile Manifest       :p1_1, 2026-11-01, 5d
-    MFS SMS & Text Quick-Parser                  :p1_2, after p1_1, 5d
-    Dedicated Transactions Search & Filter Page :p1_3, after p1_2, 4d
-    
-    section Phase 2: User Delight & Localized
-    Friendly Debt Reminder Generator (WhatsApp) :p2_1, 2026-11-15, 3d
-    Zakat Calculator & Wealth Summary           :p2_2, after p2_1, 4d
-    1-Tap Quick Action Presets on Dashboard     :p2_3, after p2_2, 3d
-    
-    section Phase 3: Analytics & Exports
-    CSV & PDF Financial Statement Export        :p3_1, 2026-11-25, 4d
-    Burn Rate & Daily Allowance Calculation     :p3_2, after p3_1, 3d
-    Goal-to-Wallet Direct Allocation Engine     :p3_3, after p3_2, 4d
-    
-    section Phase 4: Social & Expansion
-    Split Bill / Shared Bachelor Mess Ledger    :p4_1, 2026-12-05, 8d
-    Receipt Image Attachment (Supabase Storage) :p4_2, after p4_1, 6d
-```
+> For the full engineering order including **P0 Security & Sync fixes** before these features, see [**`TARGETS.md`**](TARGETS.md).
 
----
-
-## 💡 Quick Reference: Priority Backlog for GSD Workflows
-
-Use the following task IDs when kicking off development phases:
-
-- `TKF-01`: **MFS SMS Parser** — Add regex text extractor in `AddTransactionDrawer.tsx` for bKash/Nagad SMS formats.
-- `TKF-02`: **Transactions Ledger View** — Build `/transactions` route with live search, date filtering, and CSV export.
-- `TKF-03`: **WhatsApp Debt Reminder** — Add WhatsApp deep-link message generator in `src/pages/DebtsPage.tsx`.
-- `TKF-04`: **Quick-Log Preset Bar** — Add configurable quick-tap amount buttons on `src/pages/Dashboard.tsx`.
-- `TKF-05`: **Zakat Calculator** — Create dedicated calculation modal or tab factoring net eligible assets.
-- `TKF-06`: **PWA Service Worker & Manifest** — Configure Vite PWA plugin for 1-tap install on Android/iOS.
+- `TKF-01`: **Manual SMS Paste Box** — Add collapsible SMS paste box in `AddTransactionDrawer.tsx` reusing existing [`src/lib/smsParser.ts`](src/lib/smsParser.ts).
+- `TKF-02`: **Transactions Ledger View (`/transactions`)** — Full route with search, wallet/category/date filters, bulk actions, and CSV export.
+- `TKF-03`: **WhatsApp Debt Reminder** — Polite reminder template + `wa.me` deep link in `src/pages/DebtsPage.tsx`.
+- `TKF-04`: **Quick-Log Preset Bar** — Configurable micro-expense quick-tap pills on `src/pages/Dashboard.tsx` + MFS cash-out fee toggle.
+- `TKF-05`: **Zakat Calculator** — Dedicated calculation modal/tab factoring liquid wallets + recoverable lent debts minus due liabilities.
+- `TKF-06`: **PWA Service Worker & Manifest** — Configure `vite-plugin-pwa` for offline browser shell & iOS/desktop 1-tap install.

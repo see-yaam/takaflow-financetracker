@@ -117,9 +117,7 @@ export default function GoalsPage() {
     }
   };
 
-  if (isLoading) {
-    return <div className="flex items-center justify-center h-64 text-muted-foreground animate-pulse">Loading goals...</div>;
-  }
+  const displayGoals = goals || [];
 
   return (
     <div className="space-y-6">

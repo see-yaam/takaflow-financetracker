@@ -87,8 +87,8 @@ public class SmsReceiver extends BroadcastReceiver {
 
         String messageText = fullBody.toString();
 
-        // 🛡️ SECURITY SHIELD 3: Must contain financial keywords
-        boolean hasFinancialKeywords = messageText.matches("(?i).*(Tk\\.?|BDT|৳|debited|credited|paid|received|cash out|send money|balance).*");
+        // 🛡️ SECURITY SHIELD 3: Must contain financial keywords (English & Bangla)
+        boolean hasFinancialKeywords = messageText.matches("(?i)[\\s\\S]*(Tk\\.?|BDT|৳|debited|credited|paid|payment|received|cash out|cash in|send money|balance|টাকা|পেমেন্ট|পাঠানো|পেয়েছেন|ক্যাশ|উত্তোলন|জমা|ব্যালেন্স|রিচার্জ|খরচ|সফল|গৃহীত)[\\s\\S]*");
 
         if (hasFinancialKeywords) {
             Log.i(TAG, "[VERIFIED OFFICIAL SMS] Captured message from: " + sender);

@@ -183,9 +183,7 @@ export default function DebtsPage() {
   const getAdditionsForDebt = (debtId: string) =>
     (allAdditions || []).filter((a: any) => a.debt_id === debtId);
 
-  if (isLoading) {
-    return <div className="flex items-center justify-center h-64 text-muted-foreground animate-pulse">Loading debts...</div>;
-  }
+  const displayDebts = debts || [];
 
   const renderDebtCard = (d: any, i: number) => {
     const pct = Number(d.amount) > 0 ? Math.min(((Number(d.amount) - Number(d.remaining_amount)) / Number(d.amount)) * 100, 100) : 0;

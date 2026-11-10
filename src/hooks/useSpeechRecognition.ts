@@ -93,11 +93,24 @@ export function useSpeechRecognition() {
       };
 
       recognition.onresult = (event: SpeechRecognitionEvent) => {
-        // Accumulate entire sentence from 0 to results.length to prevent dropping earlier words
-        let fullSentence = "";
+        let finalTranscript = "";
+        let interimTranscript = "";
+
+        // Properly separate finalized speech from live interim preview
+        // NEVER concatenate previous interim drafts together!
         for (let i = 0; i < event.results.length; ++i) {
-          fullSentence += event.results[i][0].transcript;
+          const res = event.results[i];
+          if (res.isFinal) {
+            finalTranscript += " " + res[0].transcript;
+          } else {
+            interimTranscript = res[0].transcript;
+          }
         }
+
+        const fullSentence = `${finalTranscript} ${interimTranscript}`
+          .replace(/\s+/g, " ")
+          .trim();
+
         setTranscript(fullSentence);
 
         // Reset silence timer on every new speech token

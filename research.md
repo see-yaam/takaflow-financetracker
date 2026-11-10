@@ -1,7 +1,8 @@
 # 📊 TakaFlow Vault: Market Research, Competitive Analysis & UX Strategy
 
 > **Target Market:** Bangladesh & Emerging Mobile-First Markets  
-> **Core Value Proposition:** All-in-one Multi-Wallet Personal Vault with Local MFS (bKash/Nagad/Rocket), Automated SMS Tracking, Bengali Voice AI & Frictionless Wealth Management.
+> **Core Value Proposition:** All-in-one Multi-Wallet Personal Vault with Local MFS (bKash/Nagad/Rocket), Automated SMS & Notification Tracking, Bengali Voice AI & Frictionless Wealth Management.  
+> **Handover Docs:** See [**`DOCUMENTATION.md`**](DOCUMENTATION.md) (implemented architecture), [**`DIFFICULTIES.md`**](DIFFICULTIES.md) (critical technical gaps), and [**`TARGETS.md`**](TARGETS.md) (`P0`–`P3` developer roadmap).
 
 ---
 
@@ -93,41 +94,50 @@ This research document analyzes:
 
 ## 🔍 Part 5: Deep-Dive Audit of Current TakaFlow Implementation
 
-### Potential Weaknesses Identified in Current Build:
+### Potential Weaknesses & Current Status (Synced `v1.0.7+` — Full Audit in [`DIFFICULTIES.md`](DIFFICULTIES.md)):
 
 1. **Transaction Entry Position on Dashboard:**
-   - *Status:* Addressed by transforming wallet cards into a compact **Horizontal Carousel** (~100px) so "This Month" and Quick Actions are immediately visible without scrolling.
-   - *Next Step:* Adding a central floating **`(+)`** button in the bottom navigation bar for universal 1-tap access from any page.
+   - *Status:* Addressed via compact **Horizontal Carousel** for wallets, 3-button mobile Quick Actions bar (`+ Income`, `- Expense`, `Voice Add`), and a floating Voice Mic button in [`AppLayout.tsx`](src/components/AppLayout.tsx).
+   - *Next Step:* Optionally add a universal `(+)` quick-add button in the mobile bottom navigation bar and 1-tap expense presets (`TKF-04`).
 
-2. **Supabase Default Auth Rate Limits:**
-   - *Current Risk:* Free Supabase email service limits OTPs/password resets to **3 per hour**. If 10 users test signup simultaneously, Supabase blocks them.
-   - *Solution:* Connect custom SMTP (Resend, SendGrid, or Brevo) for unlimited instant deliverability.
+2. **Supabase Default Auth Rate Limits & Password Reset Domain:**
+   - *Current Risk:* Free Supabase email service limits OTPs to **3 per hour**. Furthermore, custom reset functions (`send-reset-email` / `verify-reset-token`) currently call unpaginated `listUsers()` (fails above 50 users) and use Resend's sandbox `onboarding@resend.dev` sender.
+   - *Solution:* Configure Custom SMTP (Resend/Brevo/SendGrid with verified domain) in Supabase Auth and fix `listUsers()` pagination ([`TARGETS.md`](TARGETS.md) `P0-05`).
 
-3. **Android SMS Read Permission (Google Play Store Policy):**
-   - *Current Risk:* Google Play has strict restrictions on `RECEIVE_SMS` permission for apps that aren't the default SMS app.
-   - *Solution:* Keep Android SMS Broadcast Receiver for direct APK distribution, and support **Notification Listener Service** (`NotificationListenerService`) which Google Play permits for financial trackers to read bKash/Nagad push notifications!
+3. **Android SMS Permission & Notification Listener (Google Play vs Direct APK):**
+   - *Current Status:* Both **`SmsReceiver.java` (`RECEIVE_SMS`)** and **`TakaFlowNotificationListener.java` (`NotificationListenerService`)** are now implemented.
+   - *Remaining Risk:* `AndroidManifest.xml` still declares `RECEIVE_SMS`, `READ_SMS`, and `REQUEST_INSTALL_PACKAGES` (Play Store policy conflict), AND `TakaFlowNotificationListener` currently bypasses the personal-number Anti-Scam Shield and clears pending events before JS confirms wallet availability ([`DIFFICULTIES.md`](DIFFICULTIES.md#23-takaflownotificationlistener-bypasses-anti-scam-shield--defaults-unknown-senders-to-bkash)).
+   - *Solution:* Fix NotificationListener anti-scam + 2-phase ack (`P0-03`/`P0-04`), then split Gradle build flavors (`directApk` vs `playStore`, `P3-01`).
 
-4. **Category Chaos (Too Many or Too Few):**
-   - If user has to scroll through 40 categories to find "Tea", it's annoying.
-   - *Solution:* Our CategoryPicker already has recent/popular sorting and AI auto-build, which solves this nicely.
+4. **Category Chaos & Offline Reliability:**
+   - Custom emoji categories (`custom_categories`) and Bengali Voice AI auto-mapping solve category fatigue well.
+   - *Urgent Sync Gap:* Offline cache + outbox exist (`src/lib/offlineSync.ts`), **but critical outbox data-loss bugs** (`OfflineSyncBadge` auto-clear, `SignOut` clearing queue, 3-retry silent drops, and missing offline queues on Debts/Goals/Transfers/Wallet Rename) must be fixed in **`P0`** before marketing "zero data loss offline sync".
 
 ---
 
 ## 🚀 Part 6: Recommended Strategic Roadmap
 
-### Phase 1: UX Polish & Friction Erasers (Current Phase)
-- [x] Horizontal Snap Carousel for Wallets on Mobile
-- [ ] Central `(+)` Floating Action Button in Mobile Bottom Navigation
-- [ ] 1-Tap "Quick Add" presets on Dashboard (`Rickshaw ৳30`, `Chai ৳15`, `Lunch ৳150`)
-- [ ] Haptic Feedback (Vibration) on tap for native app feel
+> Full prioritized engineering schedule (`P0` → `P3`) is maintained in [**`TARGETS.md`**](TARGETS.md).
 
-### Phase 2: High-Retention Viral Features
+### Phase 1: UX Polish, Core Built Capabilities & P0 Sync Hardening
+- [x] Horizontal Snap Carousel for Wallets on Mobile + Spy Privacy Hold-to-Peek
+- [x] Walkie-Talkie Bengali/Banglish Voice Assistant + Gemini Fallback
+- [x] Android Background MFS Auto-Tracking (`SmsReceiver` + `NotificationListenerService`) + Initial Anti-Scam Shield
+- [x] Offline TanStack Query Cache + Outbox Prototype *(requires P0 hardening in [`TARGETS.md`](TARGETS.md))*
+- [ ] Harden Offline Outbox, Fix SMS Ack & Close Notification Anti-Scam Gap (`P0`)
+- [ ] Central `(+)` Floating Action Button in Mobile Bottom Navigation
+- [ ] 1-Tap "Quick Add" presets on Dashboard (`Rickshaw ৳30`, `Chai ৳15`, `Lunch ৳150`) (`TKF-04`)
+- [ ] Expand Haptic Feedback beyond Spy Mode & Voice Hold
+
+### Phase 2: High-Retention Viral Features & Database Atomicity
+- [ ] Atomic Postgres RPCs (`transfer_wallet_funds` with FX conversion, `record_debt_payment`, `contribute_savings_goal`) (`P1`)
+- [ ] Dedicated Searchable `/transactions` Ledger + CSV Export (`TKF-02`)
 - [ ] bKash / Nagad Cash-Out & Send Money auto-fee calculator
-- [ ] Monthly Financial Health Score (A+ to F rating based on budget adherence)
-- [ ] Receipt Image Scanner with Gemini Vision
-- [ ] Notification Listener for automated MFS tracking on Play Store build
+- [ ] Monthly Financial Health Score & Safe Daily Burn Rate (`A+` to `F` / `0–100`)
+- [ ] Receipt Image Scanner with Gemini Vision + Supabase Storage Bucket (`P3`)
+- [ ] Play Store Compliant Build Flavor (`NotificationListenerService` without SMS/Updater permissions)
 
 ### Phase 3: Growth & Social Expansion
 - [ ] "Mesher Hishab" / Tour Split Bill feature (Splitwise alternative for BD)
 - [ ] Export PDF Statement with custom branding
-- [ ] Multi-device Realtime Cloud Sync
+- [ ] Multi-device Realtime Cloud Sync & Playwright E2E Suite

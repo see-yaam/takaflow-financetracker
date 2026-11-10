@@ -27,6 +27,7 @@ export interface ParsedSmsResult {
 export const OFFICIAL_BD_FINANCIAL_SENDERS: string[] = [
   // Mobile Financial Services (MFS)
   "BKASH", "NAGAD", "ROCKET", "16216", "16247", "16167", "UPAY", "CELLFIN", "TAP", "OK WALLET", "MEGHNAPAY",
+  "BANK", "MFS", "FINANCE", "PAY", "TAKAPAY", "বিকাশ", "নগদ", "উপায়", "সেলফিন",
 
   // Private Commercial Banks (Conventional & Islamic)
   "BRAC-BANK", "BRACBANK", "BRAC BANK", "CITY-BANK", "CITYBANK", "CITY BANK", "EBL", "EASTERN BANK", "DBBL-NEXUS", "DBBL", "DBBL NEXUS", "NEXUS",
@@ -51,6 +52,13 @@ export const OFFICIAL_BD_FINANCIAL_SENDERS: string[] = [
   "16216", "16221", "16230", "16233", "16234", "16246", "16247", "16256", "16267", "16288", "16327", "16409", "16419"
 ];
 
+// Helper to convert Bengali digits (০-৯) to Arabic digits (0-9)
+export function normalizeBengaliDigits(str: string): string {
+  if (!str) return "";
+  const banglaDigits = ["০", "১", "২", "৩", "৪", "৫", "৬", "৭", "৮", "৯"];
+  return str.replace(/[০-৯]/g, (d) => banglaDigits.indexOf(d).toString());
+}
+
 // Checks if the sender is a personal mobile number (used by scammers)
 export function isPersonalPhoneNumber(sender: string): boolean {
   if (!sender) return false;
@@ -70,7 +78,7 @@ export function isPersonalPhoneNumber(sender: string): boolean {
 // Strips hyphens, spaces, underscores, dots: e.g. "BRAC-BANK" -> "BRACBANK", "CITY-BANK" -> "CITYBANK"
 export function normalizeSenderMask(sender: string): string {
   if (!sender) return "";
-  return sender.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  return sender.toUpperCase().replace(/[^A-Z0-9\u0980-\u09FF]/g, "");
 }
 
 // Verifies whether a sender is an official registered financial institution
@@ -134,7 +142,8 @@ function cleanAmount(raw: string): number {
 export function parseBangladeshFinancialSms(sms: string, senderHeader?: string): ParsedSmsResult | null {
   if (!sms || typeof sms !== "string") return null;
 
-  const text = sms.trim();
+  // Convert any Bengali numerals (০-৯) to Arabic numerals (0-9)
+  const text = normalizeBengaliDigits(sms.trim());
   const lower = text.toLowerCase();
   const rawSender = (senderHeader || "").trim();
 
@@ -155,14 +164,44 @@ export function parseBangladeshFinancialSms(sms: string, senderHeader?: string):
   const normSender = normalizeSenderMask(rawSender);
   let detectedSource = "Bank";
 
-  if (normSender.includes("BKASH") || lower.includes("bkash")) {
+  if (
+    normSender.includes("BKASH") ||
+    normSender.includes("বিকাশ") ||
+    lower.includes("bkash") ||
+    lower.includes("বিকাশ")
+  ) {
     detectedSource = "bKash";
-  } else if (normSender.includes("NAGAD") || lower.includes("nagad")) {
+  } else if (
+    normSender.includes("NAGAD") ||
+    normSender.includes("নগদ") ||
+    lower.includes("nagad") ||
+    lower.includes("নগদ")
+  ) {
     detectedSource = "Nagad";
-  } else if (normSender.includes("ROCKET") || lower.includes("rocket") || normSender.includes("16216")) {
+  } else if (
+    normSender.includes("ROCKET") ||
+    normSender.includes("রকেট") ||
+    normSender.includes("16216") ||
+    lower.includes("rocket") ||
+    lower.includes("রকেট")
+  ) {
     detectedSource = "Rocket";
-  } else if (normSender.includes("CELLFIN") || lower.includes("cellfin") || normSender.includes("IBBL") || lower.includes("islami bank")) {
+  } else if (
+    normSender.includes("CELLFIN") ||
+    normSender.includes("IBBL") ||
+    normSender.includes("সেলফিন") ||
+    lower.includes("cellfin") ||
+    lower.includes("islami bank") ||
+    lower.includes("সেলফিন")
+  ) {
     detectedSource = "Islami Bank";
+  } else if (
+    normSender.includes("UPAY") ||
+    normSender.includes("উপায়") ||
+    lower.includes("upay") ||
+    lower.includes("উপায়")
+  ) {
+    detectedSource = "Upay";
   } else if (normSender.includes("DBBL") || normSender.includes("NEXUS") || lower.includes("dutch-bangla") || lower.includes("nexus")) {
     detectedSource = "DBBL";
   } else if (normSender.includes("BRAC") || lower.includes("brac bank") || lower.includes("brac-bank")) {
@@ -175,19 +214,17 @@ export function parseBangladeshFinancialSms(sms: string, senderHeader?: string):
     detectedSource = "Standard Chartered";
   } else if (normSender.includes("SONALI") || lower.includes("sonali bank")) {
     detectedSource = "Sonali Bank";
-  } else if (normSender.includes("UPAY") || lower.includes("upay")) {
-    detectedSource = "Upay";
   } else if (rawSender.length > 2) {
     detectedSource = rawSender;
   }
 
   // 2. Determine Transaction Type (Income vs Expense)
-  // First, check explicit primary action phrases:
+  // First, check explicit primary action phrases (English & Bangla):
   const primaryIncomePattern =
-    /\b(you have received|received tk|received bdt|received ৳|received from|cash in|deposit|deposited|credited by|credited with|credit of|is credited|has been credited|refund|cashback|added to)\b/i;
+    /(?:you have received|received tk|received bdt|received ৳|received from|cash in|deposit|deposited|credited by|credited with|credit of|is credited|has been credited|refund|cashback|added to|টাকা পেয়েছেন|টাকা গ্রহণ|ক্যাশ ইন|জমা হয়েছে|ক্রেডিট|রিফান্ড|ক্যাশব্যাক|টাকা এসেছে)/i;
 
   const primaryExpensePattern =
-    /\b(payment of|paid to|you have paid|paid tk|paid bdt|sent tk|send money to|send money of|cash out|withdrawn|withdraw|debited by|debited for|debited with|is debited|has been debited|mobile recharge|purchase at|transfer to|transferred to|deducted)\b/i;
+    /(?:payment of|paid to|you have paid|paid tk|paid bdt|sent tk|send money to|send money of|cash out|withdrawn|withdraw|debited by|debited for|debited with|is debited|has been debited|mobile recharge|purchase at|transfer to|transferred to|deducted|টাকা পাঠানো|পেমেন্ট|ক্যাশ আউট|উত্তোলন|মোবাইল রিচার্জ|রিচার্জ|খরচ|পরিশোধ|ডেবিট|কেটে নেওয়া হয়েছে|কাটা হয়েছে|কাটা হয়েছে|পাঠানো হয়েছে|সফল হয়েছে)/i;
 
   let type: "income" | "expense";
 
@@ -199,21 +236,21 @@ export function parseBangladeshFinancialSms(sms: string, senderHeader?: string):
     // If both or neither match the primary phrases, clean out non-determining phrases
     // like "Fee Tk 0.00" or "Ref: Send money" before checking:
     const strippedForType = text
-      .replace(/fee\s*(?:tk\.?|bdt|৳)?\s*0(?:\.00)?/gi, "")
-      .replace(/charge\s*(?:tk\.?|bdt|৳)?\s*0(?:\.00)?/gi, "")
+      .replace(/fee\s*(?:tk\.?|bdt|৳|টাকা)?\s*0(?:\.00)?/gi, "")
+      .replace(/charge\s*(?:tk\.?|bdt|৳|টাকা)?\s*0(?:\.00)?/gi, "")
       .replace(/ref\s*:\s*[^\s.]+/gi, "");
 
     const isIncome =
-      /\b(credit|credited|received|cash in|deposit|deposited|refund|cashback|added to|transferred from)\b/i.test(strippedForType);
+      /(?:credit|credited|received|cash in|deposit|deposited|refund|cashback|added to|transferred from|পেয়েছেন|টাকা গ্রহণ|জমা|ক্রেডিট)/i.test(strippedForType);
 
     const isExpense =
-      /\b(debit|debited|paid|payment|spent|purchase|withdrawn|withdraw|cash out|send money|sent|recharge|transfer to|transferred to|deducted)\b/i.test(strippedForType);
+      /(?:debit|debited|paid|payment|spent|purchase|withdrawn|withdraw|cash out|send money|sent|recharge|transfer to|transferred to|deducted|পাঠানো|পেমেন্ট|ক্যাশ আউট|রিচার্জ|খরচ|ডেবিট|পরিশোধ)/i.test(strippedForType);
 
     if (!isExpense && !isIncome) {
       return null;
     }
 
-    if (/\b(received|cash in|deposit|credited)\b/i.test(strippedForType) && !/\b(payment|paid|cash out|send money)\b/i.test(strippedForType)) {
+    if (/(?:received|cash in|deposit|credited|পেয়েছেন|জমা)/i.test(strippedForType) && !/(?:payment|paid|cash out|send money|পেমেন্ট|পাঠানো)/i.test(strippedForType)) {
       type = "income";
     } else {
       type = isIncome && !isExpense ? "income" : "expense";
@@ -221,11 +258,11 @@ export function parseBangladeshFinancialSms(sms: string, senderHeader?: string):
   }
 
   // 3. Extract Amount
-  // Matches: Tk 500, Tk. 500, BDT 1,200.50, ৳500, Tk500.00
+  // Matches: Tk 500, Tk. 500, BDT 1,200.50, ৳500, Tk500.00, ৫০০ টাকা, ৫০.০০ টাকা
   const amountRegexes = [
-    /(?:Tk\.?|BDT|৳)\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
-    /([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:Tk\.?|BDT|৳)/i,
-    /(?:debited|credited|paid|received|amount)\s+(?:of\s+)?(?:by\s+)?(?:for\s+)?(?:with\s+)?(?:Tk\.?|BDT|৳)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
+    /(?:Tk\.?|BDT|৳|টাকা)\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
+    /([0-9,]+(?:\.[0-9]{1,2})?)\s*(?:Tk\.?|BDT|৳|টাকা)/i,
+    /(?:debited|credited|paid|received|amount|টাকা)\s+(?:of\s+)?(?:by\s+)?(?:for\s+)?(?:with\s+)?(?:Tk\.?|BDT|৳)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i,
   ];
 
   let amount = 0;
@@ -247,7 +284,7 @@ export function parseBangladeshFinancialSms(sms: string, senderHeader?: string):
   // 4. Extract Remaining Balance (if present in SMS)
   let balance: number | undefined;
   const balanceMatch = text.match(
-    /(?:Avail(?:able)?\s*(?:Bal(?:ance)?|Limit)|Balance|Bal|Remaining\s*Bal)(?:\s+is|\s*[:=])?\s*(?:Tk\.?|BDT|৳)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i
+    /(?:ব্যালেন্স|স্থিতি|Avail(?:able)?\s*(?:Bal(?:ance)?|Limit)|Balance|Bal|Remaining\s*Bal)(?:\s+is|\s*[:=])?\s*(?:Tk\.?|BDT|৳|টাকা)?\s*([0-9,]+(?:\.[0-9]{1,2})?)/i
   );
   if (balanceMatch && balanceMatch[1]) {
     const parsedBal = cleanAmount(balanceMatch[1]);
@@ -257,7 +294,7 @@ export function parseBangladeshFinancialSms(sms: string, senderHeader?: string):
   // 5. Extract TrxID / Reference (TrxID has priority over Ref)
   let trxId: string | undefined;
   const trxMatch =
-    text.match(/(?:TrxID|TxnId|Txn ID)[:\s]*([A-Za-z0-9]+)/i) ||
+    text.match(/(?:TrxID|TxnId|Txn ID|ট্রানজাকশন আইডি)[:\s]*([A-Za-z0-9]+)/i) ||
     text.match(/(?:Ref(?:erence)?|Ref no)[:\s]*([A-Za-z0-9]+)/i);
   if (trxMatch && trxMatch[1]) {
     trxId = trxMatch[1].trim();
@@ -266,10 +303,10 @@ export function parseBangladeshFinancialSms(sms: string, senderHeader?: string):
   // 6. Extract Merchant, Counterparty or POS location
   let merchantOrParty: string | undefined;
   const merchantMatch =
-    text.match(/(?:at|to|for|from)\s+([A-Za-z0-9\s&'.-]{3,30}?)(?:\s+is\s+successful|\s+successful|\s+on|\.|\s+Fee|\s+Bal|\s+Ref|\s+TrxID|\s+at|\s+via)/i);
+    text.match(/(?:at|to|for|from|মার্চেন্ট|কাছে)\s+([A-Za-z0-9\s&'.-]{3,30}?)(?:\s+is\s+successful|\s+successful|সফল|\s+on|\.|\s+Fee|\s+Bal|\s+Ref|\s+TrxID|\s+at|\s+via)/i);
   if (merchantMatch && merchantMatch[1]) {
     const candidate = merchantMatch[1].trim();
-    if (!/^(the|a|an|A\/C|card|account|your)$/i.test(candidate)) {
+    if (!/^(the|a|an|A\/C|card|account|your|আপনার)$/i.test(candidate)) {
       merchantOrParty = candidate;
     }
   }

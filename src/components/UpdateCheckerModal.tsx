@@ -6,6 +6,50 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Download, Sparkles, RefreshCw, CheckCircle2 } from "lucide-react";
 
+function parseReleaseFeatures(bodyText?: string): Array<{ title: string; desc: string }> {
+  if (!bodyText) return [{ title: "পারফরম্যান্স আপডেট", desc: "অ্যাপের গতি বৃদ্ধি ও বাগ ফিক্স করা হয়েছে।" }];
+
+  const lines = bodyText.split("\n");
+  const features: Array<{ title: string; desc: string }> = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#") || line.toLowerCase().includes("download takaflow") || line.startsWith("---")) {
+      continue;
+    }
+
+    // Match bullet point with title & description: - **Title**: Description
+    const bulletMatch = line.match(/^[-*]\s*(?:\*\*(.*?)\*\*|\*(.*?)\*|(.*?))(?::|—|-)\s*(.*)$/);
+    if (bulletMatch) {
+      const title = (bulletMatch[1] || bulletMatch[2] || bulletMatch[3] || "").replace(/\*\*/g, "").trim();
+      const desc = (bulletMatch[4] || "").replace(/\*\*/g, "").replace(/\[.*?\]\(.*?\)/g, "").trim();
+      if (title || desc) {
+        features.push({ title: title || "নতুন ফিচার", desc: desc || title });
+        continue;
+      }
+    }
+
+    const plainBullet = line.match(/^[-*]\s*(.*)$/);
+    if (plainBullet) {
+      const cleanText = plainBullet[1].replace(/\*\*/g, "").replace(/\[.*?\]\(.*?\)/g, "").trim();
+      if (cleanText && !cleanText.toLowerCase().includes("download")) {
+        const parts = cleanText.split(/:\s*/);
+        if (parts.length > 1) {
+          features.push({ title: parts[0].trim(), desc: parts.slice(1).join(": ").trim() });
+        } else {
+          features.push({ title: cleanText, desc: "" });
+        }
+      }
+    }
+  }
+
+  if (features.length === 0) {
+    return [{ title: "নতুন উন্নতিসমূহ", desc: "নতুন ভার্সনে প্রয়োজনীয় বাগ ফিক্স ও পারফরম্যান্স উন্নয়ন করা হয়েছে।" }];
+  }
+
+  return features;
+}
+
 export default function UpdateCheckerModal() {
   const [open, setOpen] = useState(false);
   const [currentVersion, setCurrentVersion] = useState("1.0.6");
@@ -79,6 +123,8 @@ export default function UpdateCheckerModal() {
 
   if (!open || !latestRelease) return null;
 
+  const features = parseReleaseFeatures(latestRelease.body);
+
   return (
     <Dialog open={open} onOpenChange={(v) => !downloading && setOpen(v)}>
       <DialogContent className="sm:max-w-md p-6 bg-card/95 backdrop-blur-xl border-primary/40 shadow-2xl rounded-2xl">
@@ -95,12 +141,24 @@ export default function UpdateCheckerModal() {
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="p-3.5 rounded-xl bg-secondary/60 border border-border/40 space-y-2">
+          <div className="p-3.5 rounded-xl bg-secondary/50 border border-border/50 space-y-2.5">
             <span className="text-[11px] font-semibold text-primary uppercase tracking-wider flex items-center gap-1.5">
-              <Sparkles className="h-3.5 w-3.5" /> আপডেটের নতুন সুবিধাসমূহ
+              <Sparkles className="h-3.5 w-3.5 text-primary" /> আপডেটের নতুন সুবিধাসমূহ
             </span>
-            <div className="text-xs text-foreground/90 whitespace-pre-line leading-relaxed max-h-48 overflow-y-auto pr-1">
-              {latestRelease.body || "পারফরম্যান্স ও বাগ ফিক্স করা হয়েছে।"}
+            <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+              {features.map((feat, idx) => (
+                <div key={idx} className="p-2.5 rounded-lg bg-card/80 border border-border/40 text-xs flex flex-col gap-0.5">
+                  <span className="font-bold text-foreground flex items-center gap-1.5">
+                    <span className="h-1.5 w-1.5 rounded-full bg-primary shrink-0" />
+                    {feat.title}
+                  </span>
+                  {feat.desc && (
+                    <span className="text-muted-foreground text-[11px] pl-3 leading-relaxed">
+                      {feat.desc}
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
           </div>
 

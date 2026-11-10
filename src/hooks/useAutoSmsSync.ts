@@ -52,25 +52,30 @@ export function useAutoSmsSync() {
     if (!Capacitor.isNativePlatform()) return;
 
     const checkPendingSms = async () => {
-      if (isSyncing.current || !wallets || wallets.length === 0) return;
+      if (isSyncing.current) return;
       isSyncing.current = true;
 
       try {
         const { messages } = await SmsReader.getPendingSms();
         if (messages && messages.length > 0) {
+          if (!wallets || wallets.length === 0) {
+            return;
+          }
+          const availableWallets = wallets;
+
           for (const msg of messages) {
             const parsed = parseBangladeshFinancialSms(msg.body, msg.sender);
             if (!parsed) continue;
 
             // Match wallet: look for wallet whose name contains the provider
             const matchedWallet =
-              wallets.find((w) =>
+              availableWallets.find((w) =>
                 w.name.toLowerCase().includes(parsed.source.toLowerCase())
               ) ||
-              wallets.find((w) =>
+              availableWallets.find((w) =>
                 parsed.source.toLowerCase().includes(w.name.toLowerCase())
               ) ||
-              wallets[0]; // fallback to primary wallet
+              availableWallets[0]; // fallback to primary wallet
 
             const txDate = format(new Date(msg.timestamp || Date.now()), "yyyy-MM-dd");
 
@@ -99,8 +104,23 @@ export function useAutoSmsSync() {
     // Check immediately on launch
     checkPendingSms();
 
-    // Recheck every 15 seconds while active
-    const interval = setInterval(checkPendingSms, 15000);
-    return () => clearInterval(interval);
+    // Instant sync when returning to the app from notification or other apps
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        checkPendingSms();
+      }
+    };
+    const onFocus = () => checkPendingSms();
+
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    window.addEventListener("focus", onFocus);
+
+    // Recheck periodically while active
+    const interval = setInterval(checkPendingSms, 10000);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [wallets, createTx]);
 }

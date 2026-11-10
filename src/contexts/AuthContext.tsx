@@ -87,8 +87,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 
   const signOut = async () => {
-    clearOfflineCache();
-    await supabase.auth.signOut();
+    try {
+      clearOfflineCache();
+
+      // 1. Immediately reset React state so ProtectedRoute redirects right away
+      setUser(null);
+      setSession(null);
+
+      // 2. Purge all Supabase auth and cache tokens from localStorage
+      if (typeof window !== "undefined") {
+        try {
+          const keysToRemove: string[] = [];
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (
+              key &&
+              (key.startsWith("sb-") ||
+                key.includes("supabase") ||
+                key.startsWith("TAKAPERSIST_") ||
+                key.startsWith("takaflow_"))
+            ) {
+              keysToRemove.push(key);
+            }
+          }
+          keysToRemove.forEach((k) => localStorage.removeItem(k));
+        } catch {}
+      }
+
+      // 3. Inform Supabase with local scope so it never blocks on network latency
+      try {
+        await supabase.auth.signOut({ scope: "local" });
+      } catch {
+        await Promise.race([
+          supabase.auth.signOut(),
+          new Promise((resolve) => setTimeout(resolve, 1500)),
+        ]).catch(() => {});
+      }
+    } catch (err) {
+      console.warn("Sign out cleanup completed:", err);
+    }
   };
 
   return (
