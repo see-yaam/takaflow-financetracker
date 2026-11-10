@@ -23,7 +23,16 @@ export type TransactionRow = Tables<"transactions"> & {
   _isOfflinePending?: boolean;
 };
 
-export function useTransactions(filters?: { month?: string; walletId?: string; category?: string }) {
+export interface TransactionFilters {
+  month?: string;
+  /** Inclusive yyyy-MM-dd range (used by the /transactions ledger). */
+  from?: string;
+  to?: string;
+  walletId?: string;
+  category?: string;
+}
+
+export function useTransactions(filters?: TransactionFilters) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ["transactions", user?.id, filters],
@@ -41,6 +50,8 @@ export function useTransactions(filters?: { month?: string; walletId?: string; c
           const end = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`;
           query = query.gte("date", start).lte("date", end);
         }
+        if (filters?.from) query = query.gte("date", filters.from);
+        if (filters?.to) query = query.lte("date", filters.to);
         if (filters?.walletId) query = query.eq("wallet_id", filters.walletId);
         if (filters?.category) query = query.eq("category", filters.category);
         const { data, error } = await query;

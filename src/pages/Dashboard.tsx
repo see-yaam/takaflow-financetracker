@@ -411,10 +411,10 @@ export default function Dashboard() {
           {transactions && transactions.length > 0 && (
             <button
               type="button"
-              onClick={() => navigate("/calendar")}
+              onClick={() => navigate("/transactions")}
               className="text-xs text-primary font-medium hover:underline flex items-center gap-1"
             >
-              View Calendar ➔
+              View All ➔
             </button>
           )}
         </div>
