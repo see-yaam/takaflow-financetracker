@@ -7,8 +7,8 @@ android {
         applicationId "com.takaflow.financetracker"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 8
-        versionName "1.0.7"
+        versionCode 9
+        versionName "1.0.8"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,22 +16,30 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    // Release signing comes ONLY from the environment (CI injects it from GitHub Secrets).
+    // No keystore or password is ever stored in this repo. Without these env vars the
+    // release build is produced unsigned (app-release-unsigned.apk).
+    def releaseKeystorePath = System.getenv("TAKAFLOW_KEYSTORE_PATH")
+    def hasReleaseSigning = releaseKeystorePath != null && !releaseKeystorePath.isEmpty() && file(releaseKeystorePath).exists()
     signingConfigs {
-        release {
-            storeFile file('release.keystore')
-            storePassword 'takaflow123'
-            keyAlias 'takaflow'
-            keyPassword 'takaflow123'
-            v1SigningEnabled true
-            v2SigningEnabled true
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(releaseKeystorePath)
+                storePassword System.getenv("TAKAFLOW_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("TAKAFLOW_KEY_ALIAS")
+                keyPassword System.getenv("TAKAFLOW_KEY_PASSWORD")
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+            }
         }
     }
     buildTypes {
-        debug {
-            signingConfig signingConfigs.release
-        }
+        // debug uses the default Android debug key
         release {
-            signingConfig signingConfigs.release
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
         }
