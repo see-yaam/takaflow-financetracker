@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
+import { requireOnline } from "@/lib/onlineOnly";
 import { savingsGoalCreateSchema } from "@/lib/validations";
 
 export function useSavingsGoals() {
@@ -75,36 +76,18 @@ export function useAddToGoal() {
       deductFromWallet?: boolean;
     }) => {
       if (!amount || amount <= 0) throw new Error("Amount must be greater than zero");
-
-      if (deductFromWallet) {
-        if (!walletId) throw new Error("Please select a wallet");
-        const { error: txError } = await supabase.from("transactions").insert({
-          user_id: userId,
-          wallet_id: walletId,
-          type: "expense",
-          amount,
-          category: "Savings Goal",
-          note: "Savings goal contribution",
-          date: new Date().toLocaleDateString("en-CA"),
-        } as any);
-        throwIfSupabaseError(txError);
-      }
-
-      const { data: goal, error: getErr } = await supabase
-        .from("savings_goals")
-        .select("saved_amount, target_amount")
-        .eq("id", goalId)
-        .single();
-      throwIfSupabaseError(getErr);
-
-      const newSaved = Number(goal.saved_amount) + amount;
-      const completed = newSaved >= Number(goal.target_amount);
-
-      const { error: upErr } = await supabase
-        .from("savings_goals")
-        .update({ saved_amount: newSaved, completed })
-        .eq("id", goalId);
-      throwIfSupabaseError(upErr);
+      if (deductFromWallet && !walletId) throw new Error("Please select a wallet");
+      requireOnline("Adding to a savings goal");
+      // Atomic: optional wallet debit + saved_amount increment + completion flag, computed on the
+      // locked row (no read-modify-write race, no wallet debited without goal credit).
+      const { data, error } = await supabase.rpc("contribute_savings_goal", {
+        p_goal: goalId,
+        p_amount: amount,
+        p_wallet: deductFromWallet ? walletId : undefined,
+        p_date: new Date().toLocaleDateString("en-CA"),
+      });
+      throwIfSupabaseError(error);
+      return data as { saved_amount: number; completed: boolean } | null;
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["savings_goals"] });

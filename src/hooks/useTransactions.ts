@@ -15,12 +15,19 @@ import {
   generateUUID,
 } from "@/lib/offlineSync";
 import { toast } from "sonner";
+import type { Tables } from "@/integrations/supabase/types";
+
+/** A ledger row as the UI sees it: a server row (with its wallet name) or a queued offline row. */
+export type TransactionRow = Tables<"transactions"> & {
+  wallets?: { name: string } | null;
+  _isOfflinePending?: boolean;
+};
 
 export function useTransactions(filters?: { month?: string; walletId?: string; category?: string }) {
   const { user } = useAuth();
   return useQuery({
     queryKey: ["transactions", user?.id, filters],
-    queryFn: async () => {
+    queryFn: async (): Promise<TransactionRow[]> => {
       try {
         let query = supabase
           .from("transactions")
@@ -44,7 +51,7 @@ export function useTransactions(filters?: { month?: string; walletId?: string; c
             const outboxTxs = getOutbox()
               .filter((i) => i.type === "CREATE_TRANSACTION")
               .map((i) => ({ ...i.payload.transaction, id: i.payload.tempId, _isOfflinePending: true }));
-            return outboxTxs;
+            return outboxTxs as unknown as TransactionRow[];
           }
           throwIfSupabaseError(error);
         }
@@ -69,14 +76,14 @@ export function useTransactions(filters?: { month?: string; walletId?: string; c
             combined.unshift(ot as unknown as (typeof combined)[number]);
           }
         }
-        return combined;
+        return combined as TransactionRow[];
       } catch (err: any) {
         if (isNetworkError(err)) {
           console.warn("Network exception fetching transactions, using offline outbox fallback");
           const outboxTxs = getOutbox()
             .filter((i) => i.type === "CREATE_TRANSACTION")
             .map((i) => ({ ...i.payload.transaction, id: i.payload.tempId, _isOfflinePending: true }));
-          return outboxTxs;
+          return outboxTxs as unknown as TransactionRow[];
         }
         throw err;
       }

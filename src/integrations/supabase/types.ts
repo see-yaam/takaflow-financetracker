@@ -367,6 +367,7 @@ export type Database = {
           id: string
           is_reversed: boolean
           note: string | null
+          transfer_id: string | null
           type: string
           user_id: string
           wallet_id: string
@@ -379,6 +380,7 @@ export type Database = {
           id?: string
           is_reversed?: boolean
           note?: string | null
+          transfer_id?: string | null
           type: string
           user_id: string
           wallet_id: string
@@ -391,6 +393,7 @@ export type Database = {
           id?: string
           is_reversed?: boolean
           note?: string | null
+          transfer_id?: string | null
           type?: string
           user_id?: string
           wallet_id?: string
@@ -440,7 +443,41 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      add_to_debt: {
+        Args: { p_amount: number; p_date?: string; p_debt: string; p_note?: string; p_wallet: string }
+        Returns: undefined
+      }
+      contribute_savings_goal: {
+        Args: { p_amount: number; p_date?: string; p_goal: string; p_wallet?: string }
+        Returns: Json
+      }
+      create_debt: {
+        Args: {
+          p_affects_wallet?: boolean
+          p_amount: number
+          p_date?: string
+          p_note?: string
+          p_person_name: string
+          p_type: string
+          p_wallet: string
+        }
+        Returns: string
+      }
+      record_debt_payment: {
+        Args: { p_amount: number; p_date?: string; p_debt: string; p_note?: string; p_wallet: string }
+        Returns: Json
+      }
+      transfer_wallet_funds: {
+        Args: {
+          p_amount: number
+          p_converted_amount?: number
+          p_date?: string
+          p_from_wallet: string
+          p_note?: string
+          p_to_wallet: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never

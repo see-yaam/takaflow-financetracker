@@ -9,6 +9,7 @@ import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { toast } from "sonner";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { motion } from "framer-motion";
+import { formatMoney } from "@/lib/utils";
 
 export default function SettingsWalletsSection() {
   const { data: wallets } = useWallets();
@@ -86,7 +87,7 @@ export default function SettingsWalletsSection() {
                 )}
               </p>
               <p className="text-xs text-muted-foreground tabular-nums">
-                ৳{Number(w.balance).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                {formatMoney(Number(w.balance), (w as { currency?: string }).currency || "BDT")}
               </p>
             </div>
             <div className="flex gap-2">

@@ -37,6 +37,7 @@ import {
 import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { cn, formatMoney } from "@/lib/utils";
+import { sumIncomeExpenseInBDT } from "@/lib/finance";
 
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -128,9 +129,9 @@ export default function Dashboard() {
     return s + convertToBDT(Number(w.balance), currency, rates);
   }, 0);
 
-  const activeTx = transactions?.filter((t: any) => !t.is_reversed) || [];
-  const monthIncome = activeTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
-  const monthExpense = activeTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+  // Totals in BDT across wallets of different currencies; reversed rows and transfer legs never count.
+  const walletCurrency = (id: string | undefined) => wallets?.find((w) => w.id === id)?.currency || "BDT";
+  const { income: monthIncome, expense: monthExpense } = sumIncomeExpenseInBDT(transactions, walletCurrency, rates);
   const net = monthIncome - monthExpense;
 
   const openDrawer = (type: "income" | "expense") => {
@@ -439,7 +440,7 @@ export default function Dashboard() {
                   </div>
                   <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                     <span className={`text-sm font-semibold tabular-nums ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
-                      {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      {t.type === "income" ? "+" : "-"}{formatMoney(Number(t.amount), walletCurrency(t.wallet_id))}
                     </span>
                     {!isReversed && (
                       <button

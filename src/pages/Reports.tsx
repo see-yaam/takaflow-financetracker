@@ -11,6 +11,7 @@ import AIInsights from "@/components/AIInsights";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
 import EditCategoryDialog from "@/components/EditCategoryDialog";
 import { Pencil } from "lucide-react";
+import { reportableTransactions } from "@/lib/finance";
 
 const CHART_COLORS = ["hsl(152,38%,52%)", "hsl(29,87%,67%)", "hsl(16,72%,61%)", "hsl(200,60%,50%)", "hsl(280,40%,60%)", "hsl(50,80%,55%)", "hsl(330,50%,55%)"];
 
@@ -37,7 +38,8 @@ export default function Reports() {
   const { data: prevTx } = useTransactions({ month: prevMonth });
 
   const allTxRaw = useTransactions({ month }).data || [];
-  const allTxForMonth = allTxRaw.filter((t: any) => !t.is_reversed);
+  // Reversed rows and wallet-to-wallet transfer legs are not income or spending.
+  const allTxForMonth = reportableTransactions(allTxRaw);
   const totalIncome = allTxForMonth.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const totalExpense = allTxForMonth.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const net = totalIncome - totalExpense;
@@ -50,7 +52,7 @@ export default function Reports() {
   const monthEnd = lastDayOfMonth(parse(month, "yyyy-MM", new Date()));
   const daysLeftInMonth = Math.max(differenceInDays(monthEnd, today), 0);
   const prevMonthDays = getDaysInMonth(parse(prevMonth, "yyyy-MM", new Date()));
-  const prevActiveTx = (prevTx || []).filter((t: any) => !t.is_reversed);
+  const prevActiveTx = reportableTransactions(prevTx);
   const prevTotalExpense = prevActiveTx.filter((t: any) => t.type === "expense").reduce((s: number, t: any) => s + Number(t.amount), 0);
   const prevDailyAvgSpend = prevTotalExpense / (prevMonthDays || 1);
 
