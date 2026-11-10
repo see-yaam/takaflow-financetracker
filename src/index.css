@@ -134,3 +134,11 @@
     scrollbar-width: none;
   }
 }
+
+/* P3-03: printable statements */
+@media print {
+  body { background: #fff !important; color: #000 !important; }
+  aside, nav, header.md:hidden, .print:hidden, [role="navigation"] { display: none !important; }
+  .statement .vault-card { border: 1px solid #ccc !important; background: #fff !important; box-shadow: none !important; }
+  .statement { max-width: none !important; }
+}

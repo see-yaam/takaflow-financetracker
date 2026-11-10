@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { isInlineAvatar, uploadAvatar } from "@/lib/avatarStorage";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
@@ -71,6 +72,18 @@ export default function ProfilePage() {
 
   const avatarUrl = user?.user_metadata?.avatar_url;
   const fullName = user?.user_metadata?.full_name;
+
+  // One-time move of an old inline (base64) avatar out of the JWT into Storage.
+  useEffect(() => {
+    if (!user || !isInlineAvatar(avatarUrl) || !navigator.onLine) return;
+    let cancelled = false;
+    uploadAvatar(user.id, avatarUrl)
+      .then((publicUrl) => (cancelled ? undefined : supabase.auth.updateUser({ data: { ...user.user_metadata, avatar_url: publicUrl } })))
+      .catch((err) => console.warn("Avatar migration to Storage deferred:", err));
+    return () => {
+      cancelled = true;
+    };
+  }, [user, avatarUrl]);
 
   // Countdown timer for Email OTP resend
   useEffect(() => {
@@ -145,10 +158,13 @@ export default function ProfilePage() {
   const handleCropComplete = async (croppedDataUrl: string) => {
     setUploading(true);
     try {
+      if (!user) throw new Error("Not signed in");
+      // Store the image in Supabase Storage; only its short public URL goes into user_metadata.
+      const publicUrl = await uploadAvatar(user.id, croppedDataUrl, avatarUrl);
       const { error } = await supabase.auth.updateUser({
         data: {
-          ...user?.user_metadata,
-          avatar_url: croppedDataUrl,
+          ...user.user_metadata,
+          avatar_url: publicUrl,
         },
       });
 
