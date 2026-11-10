@@ -45,6 +45,7 @@ export const recurringCreateSchema = z.object({
   category: z.string().trim().min(1, "Category is required").max(100),
   note: z.string().trim().max(500).optional(),
   day_of_month: z.number().int().min(1).max(31),
+  last_applied_month: monthString.optional(),
 });
 
 export const budgetGoalSchema = z.object({

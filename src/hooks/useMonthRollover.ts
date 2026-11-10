@@ -1,69 +1,67 @@
-import { useEffect, useRef } from "react";
+import { useEffect } from "react";
 import { format, subMonths } from "date-fns";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
+import { computeRolloverSnapshot, monthBounds } from "@/lib/finance";
+
+// Recompute the previous month's snapshot once per app session (per user), so
+// late entries, reversals or a previously wrong snapshot heal themselves.
+const rolledOver = new Set<string>();
 
 export function useMonthRollover() {
   const { user } = useAuth();
   const qc = useQueryClient();
-  const ran = useRef(false);
 
   useEffect(() => {
-    if (!user || ran.current) return;
-    ran.current = true;
+    if (!user) return;
+    const prevMonth = format(subMonths(new Date(), 1), "yyyy-MM");
+    const key = `${user.id}:${prevMonth}`;
+    if (rolledOver.has(key)) return;
+    rolledOver.add(key);
 
     const run = async () => {
-      const now = new Date();
-      const prevMonth = format(subMonths(now, 1), "yyyy-MM");
-
-      // Check if snapshots already exist for previous month
-      const { data: existing } = await supabase
-        .from("monthly_snapshots")
-        .select("id")
-        .eq("month", prevMonth)
-        .limit(1);
-
-      if (existing && existing.length > 0) return;
-
-      // Get all wallets
-      const { data: wallets } = await supabase.from("wallets").select("*");
+      const { data: wallets, error: walletError } = await supabase.from("wallets").select("id, balance");
+      if (walletError) throw walletError;
       if (!wallets?.length) return;
 
-      // Get previous month transactions
-      const [y, m] = prevMonth.split("-");
-      const start = `${y}-${m}-01`;
-      const lastDay = new Date(+y, +m, 0);
-      const end = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`;
-
-      const { data: txs } = await supabase
+      // Everything dated from the start of last month onward (this month and future-dated
+      // entries too): today's balance already includes them, so they must be backed out.
+      const { start } = monthBounds(prevMonth);
+      const { data: txs, error: txError } = await supabase
         .from("transactions")
-        .select("*")
-        .gte("date", start)
-        .lte("date", end);
+        .select("wallet_id, type, amount, is_reversed, date")
+        .gte("date", start);
+      if (txError) throw txError;
 
-      for (const w of wallets) {
-        const walletTxs = (txs || []).filter((t: any) => t.wallet_id === w.id);
-        const totalIncome = walletTxs.filter((t: any) => t.type === "income").reduce((s: number, t: any) => s + Number(t.amount), 0);
-        const totalExpense = walletTxs.filter((t: any) => t.type === "expense").reduce((s: number, t: any) => s + Number(t.amount), 0);
-        const openingBalance = Number(w.balance) - totalIncome + totalExpense;
-
-        await supabase.from("monthly_snapshots").upsert(
-          {
-            user_id: user.id,
-            wallet_id: w.id,
-            month: prevMonth,
-            opening_balance: openingBalance,
-            total_income: totalIncome,
-            total_expense: totalExpense,
-          },
-          { onConflict: "user_id,wallet_id,month" }
+      const rows = wallets.map((w) => {
+        const snap = computeRolloverSnapshot(
+          Number(w.balance),
+          (txs || []).filter((t) => t.wallet_id === w.id),
+          prevMonth
         );
-      }
+        return {
+          user_id: user.id,
+          wallet_id: w.id,
+          month: prevMonth,
+          opening_balance: snap.opening_balance,
+          total_income: snap.total_income,
+          total_expense: snap.total_expense,
+        };
+      });
+
+      // One upsert for every wallet (the old code skipped all wallets once any snapshot existed).
+      const { error: upsertError } = await supabase
+        .from("monthly_snapshots")
+        .upsert(rows, { onConflict: "user_id,wallet_id,month" });
+      if (upsertError) throw upsertError;
 
       qc.invalidateQueries({ queryKey: ["monthly_snapshots"] });
     };
 
-    run().catch(console.error);
+    run().catch((err) => {
+      rolledOver.delete(key); // retry on the next Dashboard visit
+      console.error("Month rollover failed:", err);
+    });
   }, [user, qc]);
 }
