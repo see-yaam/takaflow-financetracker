@@ -67,3 +67,32 @@ export function computeRolloverSnapshot(
     closing_balance: round2(closing),
   };
 }
+
+/**
+ * Transactions that count as real income/expense. Reversed rows never count,
+ * and the two legs of a wallet-to-wallet transfer (transfer_id set) only move
+ * money between your own wallets, so they are excluded from totals.
+ */
+export function reportableTransactions<T extends { is_reversed?: boolean | null; transfer_id?: string | null }>(
+  txs: T[] | null | undefined
+): T[] {
+  return activeTransactions(txs).filter((t) => !t.transfer_id);
+}
+
+/** Income/expense totals in BDT for transactions from wallets in different currencies. */
+export function sumIncomeExpenseInBDT(
+  txs: Array<MoneyTx & { wallet_id?: string; transfer_id?: string | null }> | null | undefined,
+  currencyOfWallet: (walletId: string | undefined) => string | undefined,
+  rates: Record<string, number> | undefined
+): { income: number; expense: number } {
+  let income = 0;
+  let expense = 0;
+  for (const t of reportableTransactions(txs)) {
+    const cur = currencyOfWallet(t.wallet_id) || "BDT";
+    const rate = cur === "BDT" ? 1 : rates?.[cur] ?? 1;
+    const bdt = Number(t.amount) * rate;
+    if (t.type === "income") income += bdt;
+    else if (t.type === "expense") expense += bdt;
+  }
+  return { income: round2(income), expense: round2(expense) };
+}

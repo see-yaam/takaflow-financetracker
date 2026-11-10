@@ -11,7 +11,7 @@ export function useMonthlySnapshots(month?: string) {
       if (month) query = query.eq("month", month);
       const { data, error } = await query;
       if (error) throw error;
-      return data as any[];
+      return data;
     },
     enabled: !!user,
   });

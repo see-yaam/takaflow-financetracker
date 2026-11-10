@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import type { TransactionRow } from "@/hooks/useTransactions";
 import { useNavigate } from "react-router-dom";
 import { useWallets } from "@/hooks/useWallets";
 import { useTransactions, useReverseTransaction } from "@/hooks/useTransactions";
@@ -37,6 +38,9 @@ import {
 import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { cn, formatMoney } from "@/lib/utils";
+import { sumIncomeExpenseInBDT } from "@/lib/finance";
+import { useStreaks } from "@/hooks/useStreaks";
+import StreakBadge from "@/components/StreakBadge";
 
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -52,14 +56,16 @@ export default function Dashboard() {
   const { data: wallets, isLoading: wLoading } = useWallets();
   const { data: rates } = useCurrencyRates();
   const { data: debts } = useDebts();
+  // Consecutive days with at least one logged transaction (habit nudge).
+  const { streak } = useStreaks();
   const currentMonth = format(new Date(), "yyyy-MM");
 
   const { data: transactions } = useTransactions({ month: currentMonth });
   const { data: budgetGoal } = useBudgetGoal(currentMonth);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerType, setDrawerType] = useState<"income" | "expense">("expense");
-  const [reverseTarget, setReverseTarget] = useState<any>(null);
-  const [editTarget, setEditTarget] = useState<any>(null);
+  const [reverseTarget, setReverseTarget] = useState<TransactionRow | null>(null);
+  const [editTarget, setEditTarget] = useState<TransactionRow | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
 
   // Hold-to-Peek Spy Privacy State
@@ -75,7 +81,9 @@ export default function Dashboard() {
     setIsPeeking(true);
     try {
       if (navigator.vibrate) navigator.vibrate(15);
-    } catch {}
+    } catch {
+        // best effort: ignore
+      }
   };
 
   const handlePeekEnd = () => {
@@ -83,7 +91,9 @@ export default function Dashboard() {
       setIsPeeking(false);
       try {
         if (navigator.vibrate) navigator.vibrate(8);
-      } catch {}
+      } catch {
+        // best effort: ignore
+      }
     }
   };
 
@@ -99,7 +109,9 @@ export default function Dashboard() {
     }
     try {
       if (navigator.vibrate) navigator.vibrate([15, 40, 15]);
-    } catch {}
+    } catch {
+        // best effort: ignore
+      }
   };
 
   const applyRecurring = useApplyRecurring();
@@ -115,7 +127,9 @@ export default function Dashboard() {
     if (user?.id && wallets && wallets.length > 0) {
       try {
         localStorage.setItem(`takaflow_onboarded_${user.id}`, "true");
-      } catch {}
+      } catch {
+        // best effort: ignore
+      }
     }
   }, [user?.id, wallets]);
 
@@ -124,13 +138,13 @@ export default function Dashboard() {
   const displayWallets = wallets || [];
 
   const totalBalance = displayWallets.reduce((s, w) => {
-    const currency = (w as any).currency || "BDT";
+    const currency = w.currency || "BDT";
     return s + convertToBDT(Number(w.balance), currency, rates);
   }, 0);
 
-  const activeTx = transactions?.filter((t: any) => !t.is_reversed) || [];
-  const monthIncome = activeTx.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
-  const monthExpense = activeTx.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
+  // Totals in BDT across wallets of different currencies; reversed rows and transfer legs never count.
+  const walletCurrency = (id: string | undefined) => wallets?.find((w) => w.id === id)?.currency || "BDT";
+  const { income: monthIncome, expense: monthExpense } = sumIncomeExpenseInBDT(transactions, walletCurrency, rates);
   const net = monthIncome - monthExpense;
 
   const openDrawer = (type: "income" | "expense") => {
@@ -249,7 +263,7 @@ export default function Dashboard() {
       <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-3 overflow-x-auto sm:overflow-visible pb-2 sm:pb-0 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory no-scrollbar">
         {displayWallets.map((w, i) => {
           const Icon = iconMap[w.icon || "wallet"] || Wallet;
-          const currency = (w as any).currency || "BDT";
+          const currency = w.currency || "BDT";
           const bdtEquiv = convertToBDT(Number(w.balance), currency, rates);
           const isNegative = Number(w.balance) < 0;
           return (
@@ -318,8 +332,8 @@ export default function Dashboard() {
 
       {/* Debt summary widget */}
       {debts && debts.length > 0 && (() => {
-        const borrowedRemaining = debts.filter((d: any) => d.type === "borrowed" && !d.settled).reduce((s: number, d: any) => s + Number(d.remaining_amount), 0);
-        const lentRemaining = debts.filter((d: any) => d.type === "lent" && !d.settled).reduce((s: number, d: any) => s + Number(d.remaining_amount), 0);
+        const borrowedRemaining = debts.filter((d) => d.type === "borrowed" && !d.settled).reduce((s: number, d) => s + Number(d.remaining_amount), 0);
+        const lentRemaining = debts.filter((d) => d.type === "lent" && !d.settled).reduce((s: number, d) => s + Number(d.remaining_amount), 0);
         return (
           <button onClick={() => navigate("/debts")} className="vault-card p-4 w-full text-left hover:bg-card/80 transition-colors">
             <div className="flex items-center justify-between">
@@ -406,14 +420,17 @@ export default function Dashboard() {
       {/* Recent transactions */}
       <div className="vault-card p-4 sm:p-5">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="wallet-label">Recent Transactions</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="wallet-label">Recent Transactions</h3>
+            <StreakBadge streak={streak} />
+          </div>
           {transactions && transactions.length > 0 && (
             <button
               type="button"
-              onClick={() => navigate("/calendar")}
+              onClick={() => navigate("/transactions")}
               className="text-xs text-primary font-medium hover:underline flex items-center gap-1"
             >
-              View Calendar ➔
+              View All ➔
             </button>
           )}
         </div>
@@ -421,7 +438,7 @@ export default function Dashboard() {
           <p className="text-sm text-muted-foreground py-3">No transactions yet. Start tracking your spending.</p>
         ) : (
           <div className="space-y-0">
-            {transactions.slice(0, 10).map((t: any) => {
+            {transactions.slice(0, 10).map((t) => {
               const isReversed = t.is_reversed;
               return (
                 <div key={t.id} className={`transaction-row py-3 sm:py-3.5 ${isReversed ? "opacity-50" : ""}`}>
@@ -434,12 +451,12 @@ export default function Dashboard() {
                         {t.category}
                         {isReversed && <span className="ml-1.5 text-[10px] bg-destructive/15 text-destructive px-1.5 py-0.2 rounded no-underline inline-block">Reversed</span>}
                       </p>
-                      <p className="text-xs text-muted-foreground truncate">{t.note || (t as any).wallets?.name} · {format(new Date(t.date), "MMM d")}</p>
+                      <p className="text-xs text-muted-foreground truncate">{t.note || t.wallets?.name} · {format(new Date(t.date), "MMM d")}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1 sm:gap-2 shrink-0">
                     <span className={`text-sm font-semibold tabular-nums ${isReversed ? "line-through text-muted-foreground" : t.type === "income" ? "text-primary" : "text-foreground"}`}>
-                      {t.type === "income" ? "+" : "-"}৳{Number(t.amount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                      {t.type === "income" ? "+" : "-"}{formatMoney(Number(t.amount), walletCurrency(t.wallet_id))}
                     </span>
                     {!isReversed && (
                       <button

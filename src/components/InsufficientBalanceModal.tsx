@@ -12,9 +12,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useWallets } from "@/hooks/useWallets";
 import { useCreateTransaction } from "@/hooks/useTransactions";
+import { useTransferFunds } from "@/hooks/useTransfers";
 import { useCreateDebt } from "@/hooks/useDebts";
 import { useCreateRecurring } from "@/hooks/useRecurringTransactions";
-import { supabase } from "@/integrations/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
@@ -45,6 +45,7 @@ export default function InsufficientBalanceModal({
 }: Props) {
   const { data: wallets } = useWallets();
   const createTx = useCreateTransaction();
+  const transferFunds = useTransferFunds();
   const createDebt = useCreateDebt();
   const createRecurring = useCreateRecurring();
   const qc = useQueryClient();
@@ -108,6 +109,10 @@ export default function InsufficientBalanceModal({
     }
 
     const sourceWallet = wallets?.find((w) => w.id === sourceWalletId);
+    if (sourceWallet && (sourceWallet.currency || "BDT") !== (targetWallet.currency || "BDT")) {
+      toast.error("Different currencies: use Wallet Settings → Transfer to convert between them first.");
+      return;
+    }
     if (!sourceWallet || Number(sourceWallet.balance) < transferAmt) {
       toast.error(`${sourceWallet?.name || "সিলেক্টেড ওয়ালেটে"} পর্যাপ্ত ব্যালেন্স নেই`);
       return;
@@ -115,20 +120,13 @@ export default function InsufficientBalanceModal({
 
     setIsProcessing(true);
     try {
-      const newSourceBal = Number(sourceWallet.balance) - transferAmt;
-      const newTargetBal = currentBalance + transferAmt;
-
-      const { error: e1 } = await supabase
-        .from("wallets")
-        .update({ balance: newSourceBal })
-        .eq("id", sourceWallet.id);
-      if (e1) throw e1;
-
-      const { error: e2 } = await supabase
-        .from("wallets")
-        .update({ balance: newTargetBal })
-        .eq("id", targetWallet.id);
-      if (e2) throw e2;
+      // Atomic: debit, credit and a linked pair of ledger rows in one database transaction.
+      await transferFunds.mutateAsync({
+        fromWalletId: sourceWallet.id,
+        toWalletId: targetWallet.id,
+        amount: transferAmt,
+        date: attemptedExpense.date,
+      });
 
       await createTx.mutateAsync({
         wallet_id: targetWallet.id,

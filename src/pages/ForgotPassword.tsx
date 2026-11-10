@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import CurrencyDoodles from "@/components/CurrencyDoodles";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { forgotPasswordSchema } from "@/lib/validations";
+import { authRedirectUrl } from "@/lib/authRedirect";
 import { Mail, ArrowLeft, CheckCircle2 } from "lucide-react";
 
 export default function ForgotPassword() {
@@ -22,12 +23,12 @@ export default function ForgotPassword() {
 
     try {
       const parsed = forgotPasswordSchema.parse({ email: email.trim().toLowerCase() });
-      const { data, error } = await supabase.functions.invoke("send-reset-email", {
-        body: parsed,
+      // Supabase Auth sends the email through the project's SMTP (Gmail) and rate-limits requests.
+      const { error } = await supabase.auth.resetPasswordForEmail(parsed.email, {
+        redirectTo: authRedirectUrl("/reset-password"),
       });
 
       if (error) throw error;
-      if (data?.error) throw new Error(data.error);
       setSent(true);
       toast.success("If an account exists, a reset link has been sent!");
     } catch (err) {

@@ -110,7 +110,7 @@ export default function UpdateCheckerModal() {
     try {
       await AppUpdater.downloadAndInstall({ url: apkAsset.browser_download_url });
       toast.success("ডাউনলোড সম্পন্ন হলে স্ক্রিনে ইনস্টল প্রম্পট আসবে!");
-    } catch (err: any) {
+    } catch (err) {
       console.error("Update failed:", err);
       if (err?.message === "INSTALL_PERMISSION_REQUIRED" || err === "INSTALL_PERMISSION_REQUIRED") {
         toast.warning("দয়া করে TakaFlow-কে 'Install unknown apps' পারমিশন দিন, তারপর আবার ট্যাপ করুন।");

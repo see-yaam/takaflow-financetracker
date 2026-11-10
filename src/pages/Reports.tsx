@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import type { TransactionRow } from "@/hooks/useTransactions";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useWallets } from "@/hooks/useWallets";
 import { useMonthlySnapshots } from "@/hooks/useMonthlySnapshots";
@@ -11,6 +12,7 @@ import AIInsights from "@/components/AIInsights";
 import MoneyFlowChart from "@/components/MoneyFlowChart";
 import EditCategoryDialog from "@/components/EditCategoryDialog";
 import { Pencil } from "lucide-react";
+import { reportableTransactions } from "@/lib/finance";
 
 const CHART_COLORS = ["hsl(152,38%,52%)", "hsl(29,87%,67%)", "hsl(16,72%,61%)", "hsl(200,60%,50%)", "hsl(280,40%,60%)", "hsl(50,80%,55%)", "hsl(330,50%,55%)"];
 
@@ -25,7 +27,7 @@ export default function Reports() {
   const [month, setMonth] = useState(months[0].value);
   const [filterWallet, setFilterWallet] = useState("all");
   const [filterCategory, setFilterCategory] = useState("all");
-  const [editTarget, setEditTarget] = useState<any>(null);
+  const [editTarget, setEditTarget] = useState<TransactionRow | null>(null);
 
   const { data: transactions } = useTransactions({ month, walletId: filterWallet === "all" ? undefined : filterWallet, category: filterCategory === "all" ? undefined : filterCategory });
   const { data: wallets } = useWallets();
@@ -37,7 +39,8 @@ export default function Reports() {
   const { data: prevTx } = useTransactions({ month: prevMonth });
 
   const allTxRaw = useTransactions({ month }).data || [];
-  const allTxForMonth = allTxRaw.filter((t: any) => !t.is_reversed);
+  // Reversed rows and wallet-to-wallet transfer legs are not income or spending.
+  const allTxForMonth = reportableTransactions(allTxRaw);
   const totalIncome = allTxForMonth.filter((t) => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const totalExpense = allTxForMonth.filter((t) => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const net = totalIncome - totalExpense;
@@ -50,8 +53,8 @@ export default function Reports() {
   const monthEnd = lastDayOfMonth(parse(month, "yyyy-MM", new Date()));
   const daysLeftInMonth = Math.max(differenceInDays(monthEnd, today), 0);
   const prevMonthDays = getDaysInMonth(parse(prevMonth, "yyyy-MM", new Date()));
-  const prevActiveTx = (prevTx || []).filter((t: any) => !t.is_reversed);
-  const prevTotalExpense = prevActiveTx.filter((t: any) => t.type === "expense").reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const prevActiveTx = reportableTransactions(prevTx);
+  const prevTotalExpense = prevActiveTx.filter((t) => t.type === "expense").reduce((s: number, t) => s + Number(t.amount), 0);
   const prevDailyAvgSpend = prevTotalExpense / (prevMonthDays || 1);
 
   // Category data
@@ -115,7 +118,7 @@ export default function Reports() {
   // Previous month summary for AI
   const prevMonthSummary = useMemo(() => {
     if (!prevTx?.length) return undefined;
-    const activePrev = prevTx.filter((t: any) => !t.is_reversed);
+    const activePrev = prevTx.filter((t) => !t.is_reversed);
     const prevCategories: Record<string, number> = {};
     activePrev.filter((t) => t.type === "expense").forEach((t) => {
       prevCategories[t.category] = (prevCategories[t.category] || 0) + Number(t.amount);
@@ -130,7 +133,7 @@ export default function Reports() {
   // Wallet snapshots section
   const walletBreakdown = useMemo(() => {
     if (!snapshots?.length || !wallets?.length) return null;
-    return snapshots.map((s: any) => {
+    return snapshots.map((s) => {
       const w = wallets.find((w) => w.id === s.wallet_id);
       return {
         name: w?.name || "Unknown",
@@ -222,7 +225,7 @@ export default function Reports() {
               />
               <Tooltip
                 contentStyle={{ backgroundColor: "hsl(150,30%,12%)", border: "1px solid hsl(150,15%,20%)", borderRadius: "12px", color: "#fff", fontSize: 12 }}
-                formatter={(v: any, name: any) => [`৳${Number(v).toLocaleString()}`, name === "income" ? "Income" : "Expense"]}
+                formatter={(v: number | string, name: string) => [`৳${Number(v).toLocaleString()}`, name === "income" ? "Income" : "Expense"]}
               />
               <Legend
                 verticalAlign="top"
@@ -253,8 +256,8 @@ export default function Reports() {
                   outerRadius="65%"
                   innerRadius="35%"
                   labelLine
-                  label={({ name, percent }: any) =>
-                    `${name} ${(percent * 100).toFixed(0)}%`
+                  label={({ name, percent }: { name?: string; percent?: number }) =>
+                    `${name} ${((percent ?? 0) * 100).toFixed(0)}%`
                   }
                 >
                   {categoryData.map((_, i) => (
@@ -273,7 +276,7 @@ export default function Reports() {
                 />
                 <Tooltip
                   contentStyle={{ backgroundColor: "hsl(150,30%,12%)", border: "1px solid hsl(150,15%,20%)", borderRadius: "12px", color: "#fff", fontSize: 12 }}
-                  formatter={(v: any, name: any) => [`৳${Number(v).toLocaleString()}`, name]}
+                  formatter={(v: number | string, name: string) => [`৳${Number(v).toLocaleString()}`, name]}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -289,8 +292,8 @@ export default function Reports() {
       {/* AI Insights */}
       {allTxForMonth.length > 0 && (
         <AIInsights
-          currentTransactions={allTxForMonth.map((t: any) => ({ date: t.date, amount: Number(t.amount), category: t.category, type: t.type }))}
-          previousTransactions={(prevTx || []).filter((t: any) => !t.is_reversed).map((t: any) => ({ date: t.date, amount: Number(t.amount), category: t.category, type: t.type }))}
+          currentTransactions={allTxForMonth.map((t) => ({ date: t.date, amount: Number(t.amount), category: t.category, type: t.type }))}
+          previousTransactions={(prevTx || []).filter((t) => !t.is_reversed).map((t) => ({ date: t.date, amount: Number(t.amount), category: t.category, type: t.type }))}
           budget={budgetGoal ? Number(budgetGoal.monthly_budget) : null}
           currentDate={format(new Date(), "MMMM d, yyyy")}
           daysLeft={daysLeftInMonth}
@@ -328,7 +331,7 @@ export default function Reports() {
           <p className="text-sm text-muted-foreground">No transactions found.</p>
         ) : (
           <div className="space-y-0">
-            {transactions.map((t: any) => {
+            {transactions.map((t) => {
               const isReversed = t.is_reversed;
               return (
                 <div key={t.id} className={`transaction-row ${isReversed ? "opacity-50" : ""}`}>

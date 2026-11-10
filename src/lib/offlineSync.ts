@@ -4,6 +4,7 @@ import { createSyncStoragePersister } from "@tanstack/query-sync-storage-persist
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { useState, useEffect } from "react";
+import { matchesTxFilters, TxFilterLike } from "@/lib/txFilters";
 
 /*
  * Offline outbox: durable, per-user queue of mutations made while offline (or
@@ -24,7 +25,12 @@ export type OutboxActionType =
   | "DELETE_TRANSACTION"
   | "REVERSE_TRANSACTION"
   | "CREATE_WALLET"
-  | "DELETE_WALLET";
+  | "DELETE_WALLET"
+  | "UPDATE_WALLET"
+  | "UPDATE_TRANSACTION_CATEGORY"
+  | "UPSERT_BUDGET"
+  | "CREATE_RECURRING"
+  | "DELETE_RECURRING";
 
 export type OutboxStatus = "pending" | "failed";
 
@@ -49,11 +55,35 @@ export interface OutboxWalletPayload {
   user_id: string;
 }
 
+export interface OutboxBudgetPayload {
+  user_id: string;
+  month: string;
+  monthly_budget: number;
+}
+
+export interface OutboxRecurringPayload {
+  id: string;
+  user_id: string;
+  wallet_id: string;
+  type: string;
+  amount: number;
+  category: string;
+  note: string | null;
+  day_of_month: number;
+  last_applied_month: string | null;
+}
+
 export interface OutboxPayload {
   tempId?: string;
   transaction?: OutboxTransactionPayload;
   wallet?: OutboxWalletPayload;
   id?: string;
+  /** UPDATE_WALLET */
+  updates?: { name?: string; balance?: number };
+  /** UPDATE_TRANSACTION_CATEGORY */
+  category?: string;
+  budget?: OutboxBudgetPayload;
+  recurring?: OutboxRecurringPayload;
 }
 
 export interface OutboxItem {
@@ -265,7 +295,14 @@ export function currentOwner(): string | null {
 }
 
 function itemOwner(item: OutboxItem): string | null {
-  return item.ownerId ?? item.payload?.transaction?.user_id ?? item.payload?.wallet?.user_id ?? null;
+  return (
+    item.ownerId ??
+    item.payload?.transaction?.user_id ??
+    item.payload?.wallet?.user_id ??
+    item.payload?.budget?.user_id ??
+    item.payload?.recurring?.user_id ??
+    null
+  );
 }
 
 function belongsTo(item: OutboxItem, uid: string | null): boolean {
@@ -494,10 +531,12 @@ export function handleOfflineCreateTransaction(
   const optimisticTx = { ...transaction, created_at: now, is_reversed: false, _isOfflinePending: true };
 
   // 2. Optimistically update local ["transactions"] queries
-  qc.setQueriesData<CachedTx[]>({ queryKey: ["transactions"] }, (oldData) => {
-    if (!Array.isArray(oldData)) return [optimisticTx];
-    return [optimisticTx, ...oldData];
-  });
+  // Only into ["transactions", uid, filters] queries the row actually belongs to.
+  for (const [key, oldData] of qc.getQueriesData<CachedTx[]>({ queryKey: ["transactions"] })) {
+    const filters = (key as unknown[])[2] as TxFilterLike | undefined;
+    if (!matchesTxFilters(optimisticTx, filters)) continue;
+    qc.setQueryData(key, Array.isArray(oldData) ? [optimisticTx, ...oldData] : [optimisticTx]);
+  }
 
   // 3. Optimistically update local ["wallets"] balance
   adjustWalletBalance(qc, tx.wallet_id, tx.type === "income" ? Number(tx.amount) : -Number(tx.amount));
@@ -620,6 +659,69 @@ export function handleOfflineDeleteWallet(id: string, qc: QueryClient) {
     return oldData.filter((t) => t.wallet_id !== id);
   });
 
+  triggerSync(qc);
+}
+
+/** Wallet rename / balance edit made offline (or when the network failed). */
+export function handleOfflineUpdateWallet(id: string, updates: { name?: string; balance?: number }, qc: QueryClient) {
+  const queuedCreate = findQueuedCreate(id, "CREATE_WALLET");
+  if (queuedCreate?.payload.wallet && !isInFlight(queuedCreate.id)) {
+    updateOutboxItem(queuedCreate.id, { payload: { ...queuedCreate.payload, wallet: { ...queuedCreate.payload.wallet, ...updates } } });
+  } else {
+    addToOutbox("UPDATE_WALLET", { id, updates });
+  }
+  qc.setQueriesData<CachedWallet[]>({ queryKey: ["wallets"] }, (old) =>
+    Array.isArray(old) ? old.map((w) => (w.id === id ? { ...w, ...updates } : w)) : old
+  );
+  triggerSync(qc);
+}
+
+/** Recategorize a transaction offline (patches a still-queued create in place). */
+export function handleOfflineUpdateCategory(id: string, category: string, qc: QueryClient) {
+  const queuedCreate = findQueuedCreate(id, "CREATE_TRANSACTION");
+  if (queuedCreate?.payload.transaction && !isInFlight(queuedCreate.id)) {
+    updateOutboxItem(queuedCreate.id, {
+      payload: { ...queuedCreate.payload, transaction: { ...queuedCreate.payload.transaction, category } },
+    });
+  } else {
+    addToOutbox("UPDATE_TRANSACTION_CATEGORY", { id, category });
+  }
+  qc.setQueriesData<CachedTx[]>({ queryKey: ["transactions"] }, (old) =>
+    Array.isArray(old) ? old.map((t) => (t.id === id ? { ...t, category } : t)) : old
+  );
+  triggerSync(qc);
+}
+
+export function handleOfflineUpsertBudget(budget: OutboxBudgetPayload, qc: QueryClient) {
+  // Only the latest budget for a month matters: replace an older queued one.
+  const older = getOutbox().filter(
+    (i) => i.type === "UPSERT_BUDGET" && i.payload.budget?.month === budget.month && !isInFlight(i.id)
+  );
+  if (older.length) discardOutboxItems(older.map((i) => i.id));
+  addToOutbox("UPSERT_BUDGET", { budget }, budget.user_id);
+  qc.setQueriesData({ queryKey: ["budget_goal"] }, (old: unknown) =>
+    old && typeof old === "object" && (old as { month?: string }).month === budget.month ? { ...(old as object), ...budget } : old
+  );
+  triggerSync(qc);
+}
+
+export function handleOfflineCreateRecurring(rule: Omit<OutboxRecurringPayload, "id">, qc: QueryClient) {
+  const recurring: OutboxRecurringPayload = { ...rule, id: generateUUID() };
+  addToOutbox("CREATE_RECURRING", { tempId: recurring.id, recurring }, rule.user_id);
+  qc.setQueriesData({ queryKey: ["recurring_transactions"] }, (old: unknown) =>
+    Array.isArray(old) ? [...old, { ...recurring, _isOfflinePending: true }] : old
+  );
+  triggerSync(qc);
+  return recurring;
+}
+
+export function handleOfflineDeleteRecurring(id: string, qc: QueryClient) {
+  const queued = getOutbox().find((i) => i.type === "CREATE_RECURRING" && i.payload.tempId === id);
+  if (queued && !isInFlight(queued.id)) removeFromOutbox(queued.id);
+  else addToOutbox("DELETE_RECURRING", { id });
+  qc.setQueriesData({ queryKey: ["recurring_transactions"] }, (old: unknown) =>
+    Array.isArray(old) ? old.filter((r: { id: string }) => r.id !== id) : old
+  );
   triggerSync(qc);
 }
 
@@ -819,6 +921,46 @@ async function syncOne(item: OutboxItem, ctx: SyncContext): Promise<ItemOutcome>
             : await withTimeout(supabase.from("wallets").delete().eq("id", id), 20000);
         return failureFromResponse(res, false);
       }
+      case "UPDATE_WALLET": {
+        const id = item.payload?.id;
+        if (!id || !item.payload.updates) return { kind: "error", cls: "permanent", error: new Error("Malformed wallet update") };
+        const res = await withTimeout(supabase.from("wallets").update(item.payload.updates).eq("id", id), 20000);
+        return failureFromResponse(res, false);
+      }
+      case "UPDATE_TRANSACTION_CATEGORY": {
+        const id = item.payload?.id;
+        const category = item.payload?.category;
+        if (!id || !category) return { kind: "error", cls: "permanent", error: new Error("Malformed category update") };
+        const res = await withTimeout(supabase.from("transactions").update({ category }).eq("id", id), 20000);
+        return failureFromResponse(res, false);
+      }
+      case "UPSERT_BUDGET": {
+        const budget = item.payload?.budget;
+        if (!budget) return { kind: "error", cls: "permanent", error: new Error("Malformed budget item") };
+        const res = await withTimeout(
+          supabase.from("budget_goals").upsert({ ...budget, user_id: budget.user_id || ctx.uid }, { onConflict: "user_id,month" }),
+          20000
+        );
+        return failureFromResponse(res, false);
+      }
+      case "CREATE_RECURRING": {
+        const rule = item.payload?.recurring;
+        if (!rule) return { kind: "error", cls: "permanent", error: new Error("Malformed recurring item") };
+        const walletId = ctx.tempIdMap.get(rule.wallet_id) ?? rule.wallet_id;
+        const walletCreate = getOutboxFor(ctx.uid).find((i) => i.type === "CREATE_WALLET" && i.payload?.tempId === walletId);
+        if (walletCreate) return { kind: "blocked", by: walletCreate.id };
+        const res = await withTimeout(
+          supabase.from("recurring_transactions").insert({ ...rule, wallet_id: walletId, user_id: rule.user_id || ctx.uid }),
+          20000
+        );
+        return failureFromResponse(res, true);
+      }
+      case "DELETE_RECURRING": {
+        const id = item.payload?.id;
+        if (!id) return { kind: "error", cls: "permanent", error: new Error("Malformed recurring delete") };
+        const res = await withTimeout(supabase.from("recurring_transactions").delete().eq("id", id), 20000);
+        return failureFromResponse(res, false);
+      }
       default:
         return { kind: "error", cls: "permanent", error: new Error(`Unknown outbox action ${String(item.type)}`) };
     }
@@ -948,6 +1090,8 @@ async function runSyncPass(queryClient: QueryClient, force: boolean): Promise<Sy
     queryClient.invalidateQueries({ queryKey: ["transactions"] });
     queryClient.invalidateQueries({ queryKey: ["wallets"] });
     queryClient.invalidateQueries({ queryKey: ["debts"] });
+    queryClient.invalidateQueries({ queryKey: ["budget_goal"] });
+    queryClient.invalidateQueries({ queryKey: ["recurring_transactions"] });
     toast.success(`Synced ${synced} offline ${synced === 1 ? "change" : "changes"} with cloud! ☁️✨`);
   }
   if (newlyFailed > 0) {
