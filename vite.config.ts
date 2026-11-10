@@ -13,6 +13,7 @@ function readAppVersion(): string {
   }
 }
 import { componentTagger } from "lovable-tagger";
+import { VitePWA } from "vite-plugin-pwa";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -26,7 +27,35 @@ export default defineConfig(({ mode }) => ({
       overlay: false,
     },
   },
-  plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  plugins: [
+    react(),
+    mode === "development" && componentTagger(),
+    // P2-07: installable PWA with an offline app shell (web only; registered from main.tsx,
+    // never inside the Capacitor APK). Data stays in the persisted query cache, not the SW.
+    VitePWA({
+      registerType: "prompt",
+      injectRegister: false,
+      includeAssets: ["favicon.ico", "favicon.svg", "robots.txt"],
+      manifest: {
+        name: "TakaFlow Finance Vault",
+        short_name: "TakaFlow",
+        description: "Multi-wallet personal finance tracker for Bangladesh (bKash, Nagad, banks, cash).",
+        theme_color: "#0f1f17",
+        background_color: "#0f1f17",
+        display: "standalone",
+        start_url: "/dashboard",
+        scope: "/",
+        icons: [{ src: "/favicon.svg", sizes: "any", type: "image/svg+xml", purpose: "any maskable" }],
+      },
+      workbox: {
+        navigateFallback: "/index.html",
+        globPatterns: ["**/*.{js,css,html,svg,ico,woff2}"],
+        // heic2any is ~1.4 MB and only used for iPhone photo uploads.
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        cleanupOutdatedCaches: true,
+      },
+    }),
+  ].filter(Boolean),
   build: {
     rollupOptions: {
       output: {
