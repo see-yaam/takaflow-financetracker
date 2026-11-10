@@ -11,10 +11,12 @@ import {
   getOutbox,
   removeFromOutbox,
   findQueuedCreate,
+  handleOfflineUpdateCategory,
   processOutboxSync,
   generateUUID,
 } from "@/lib/offlineSync";
 import { toast } from "sonner";
+import { matchesTxFilters } from "@/lib/txFilters";
 import type { Tables } from "@/integrations/supabase/types";
 
 /** A ledger row as the UI sees it: a server row (with its wallet name) or a queued offline row. */
@@ -32,10 +34,26 @@ export interface TransactionFilters {
   category?: string;
 }
 
+/** Queued (not yet synced) creates that belong in a query with these filters. */
+function queuedRowsFor(filters?: TransactionFilters): TransactionRow[] {
+  return getOutbox()
+    .filter((i) => i.type === "CREATE_TRANSACTION" && i.payload.transaction && matchesTxFilters(i.payload.transaction, filters))
+    .map((i) => ({ ...i.payload.transaction, id: i.payload.tempId, _isOfflinePending: true }) as unknown as TransactionRow);
+}
+
+/** Offline: keep the last cached rows and add queued rows that aren't in them yet. */
+function mergeQueued(cached: TransactionRow[] | undefined, queued: TransactionRow[]): TransactionRow[] {
+  const base = (cached || []).filter((r) => !r._isOfflinePending);
+  const ids = new Set(base.map((r) => r.id));
+  return [...queued.filter((q) => !ids.has(q.id)), ...base];
+}
+
 export function useTransactions(filters?: TransactionFilters) {
   const { user } = useAuth();
+  const qc = useQueryClient();
+  const queryKey = ["transactions", user?.id, filters];
   return useQuery({
-    queryKey: ["transactions", user?.id, filters],
+    queryKey,
     queryFn: async (): Promise<TransactionRow[]> => {
       try {
         let query = supabase
@@ -59,10 +77,8 @@ export function useTransactions(filters?: TransactionFilters) {
         if (error) {
           if (isNetworkError(error)) {
             console.warn("Network error fetching transactions, using offline outbox fallback");
-            const outboxTxs = getOutbox()
-              .filter((i) => i.type === "CREATE_TRANSACTION")
-              .map((i) => ({ ...i.payload.transaction, id: i.payload.tempId, _isOfflinePending: true }));
-            return outboxTxs as unknown as TransactionRow[];
+            const outboxTxs = queuedRowsFor(filters);
+            return mergeQueued(qc.getQueryData<TransactionRow[]>(queryKey), outboxTxs);
           }
           throwIfSupabaseError(error);
         }
@@ -76,9 +92,7 @@ export function useTransactions(filters?: TransactionFilters) {
           if (txId && existingIds.has(txId)) removeFromOutbox(item.id);
         }
 
-        const outboxTxs = getOutbox()
-          .filter((i) => i.type === "CREATE_TRANSACTION")
-          .map((i) => ({ ...i.payload.transaction, id: i.payload.tempId, _isOfflinePending: true }));
+        const outboxTxs = queuedRowsFor(filters);
 
         const combined = [...(data || [])];
         for (const ot of outboxTxs) {
@@ -91,10 +105,8 @@ export function useTransactions(filters?: TransactionFilters) {
       } catch (err: any) {
         if (isNetworkError(err)) {
           console.warn("Network exception fetching transactions, using offline outbox fallback");
-          const outboxTxs = getOutbox()
-            .filter((i) => i.type === "CREATE_TRANSACTION")
-            .map((i) => ({ ...i.payload.transaction, id: i.payload.tempId, _isOfflinePending: true }));
-          return outboxTxs as unknown as TransactionRow[];
+          const outboxTxs = queuedRowsFor(filters);
+          return mergeQueued(qc.getQueryData<TransactionRow[]>(queryKey), outboxTxs);
         }
         throw err;
       }
@@ -248,11 +260,25 @@ export function useUpdateTransactionCategory() {
   return useMutation({
     networkMode: "offlineFirst",
     mutationFn: async ({ id, category }: { id: string; category: string }) => {
-      const { error } = await supabase
-        .from("transactions")
-        .update({ category: category.trim() } as any)
-        .eq("id", id);
-      throwIfSupabaseError(error);
+      const clean = category.trim();
+      if ((typeof navigator !== "undefined" && !navigator.onLine) || findQueuedCreate(id, "CREATE_TRANSACTION")) {
+        handleOfflineUpdateCategory(id, clean, qc);
+        return;
+      }
+      try {
+        const { error } = await supabase.from("transactions").update({ category: clean }).eq("id", id);
+        if (error && isNetworkError(error)) {
+          handleOfflineUpdateCategory(id, clean, qc);
+          return;
+        }
+        throwIfSupabaseError(error);
+      } catch (err) {
+        if (isNetworkError(err)) {
+          handleOfflineUpdateCategory(id, clean, qc);
+          return;
+        }
+        throw err;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });

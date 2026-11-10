@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
 import { recurringCreateSchema } from "@/lib/validations";
 import { dueOccurrences, recurringTxId } from "@/lib/recurring";
-import { isNetworkError } from "@/lib/offlineSync";
+import { handleOfflineCreateRecurring, handleOfflineDeleteRecurring, isNetworkError } from "@/lib/offlineSync";
 import { toast } from "sonner";
 
 export function useRecurringTransactions() {
@@ -39,13 +39,26 @@ export function useCreateRecurring() {
       last_applied_month?: string;
     }) => {
       const parsed = recurringCreateSchema.parse(r);
-      const { data, error } = await supabase
-        .from("recurring_transactions")
-        .insert({ ...parsed, user_id: user!.id } as any)
-        .select()
-        .single();
-      throwIfSupabaseError(error);
-      return data;
+      const rule = {
+        user_id: user!.id,
+        wallet_id: parsed.wallet_id,
+        type: parsed.type,
+        amount: parsed.amount,
+        category: parsed.category,
+        note: parsed.note ?? null,
+        day_of_month: parsed.day_of_month,
+        last_applied_month: parsed.last_applied_month ?? null,
+      };
+      if (typeof navigator !== "undefined" && !navigator.onLine) return handleOfflineCreateRecurring(rule, qc);
+      try {
+        const { data, error } = await supabase.from("recurring_transactions").insert(rule).select().single();
+        if (error && isNetworkError(error)) return handleOfflineCreateRecurring(rule, qc);
+        throwIfSupabaseError(error);
+        return data;
+      } catch (err) {
+        if (isNetworkError(err)) return handleOfflineCreateRecurring(rule, qc);
+        throw err;
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recurring_transactions"] }),
   });
@@ -55,8 +68,24 @@ export function useDeleteRecurring() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("recurring_transactions").delete().eq("id", id);
-      throwIfSupabaseError(error);
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        handleOfflineDeleteRecurring(id, qc);
+        return;
+      }
+      try {
+        const { error } = await supabase.from("recurring_transactions").delete().eq("id", id);
+        if (error && isNetworkError(error)) {
+          handleOfflineDeleteRecurring(id, qc);
+          return;
+        }
+        throwIfSupabaseError(error);
+      } catch (err) {
+        if (isNetworkError(err)) {
+          handleOfflineDeleteRecurring(id, qc);
+          return;
+        }
+        throw err;
+      }
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["recurring_transactions"] }),
   });

@@ -1,16 +1,31 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import type { Tables } from "@/integrations/supabase/types";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
 import { parseStrict, walletCreateSchema, walletUpdateSchema } from "@/lib/validations";
 
-import { handleOfflineCreateWallet, handleOfflineDeleteWallet, isNetworkError, getOutbox, removeFromOutbox, findQueuedCreate, updateOutboxItem, processOutboxSync, generateUUID } from "@/lib/offlineSync";
+import { handleOfflineCreateWallet, handleOfflineDeleteWallet, isNetworkError, getOutbox, removeFromOutbox, findQueuedCreate, handleOfflineUpdateWallet, processOutboxSync, generateUUID } from "@/lib/offlineSync";
+
+/** A wallet as the UI sees it: a server row or a queued offline one. */
+export type WalletRow = Tables<"wallets"> & { _isOfflinePending?: boolean };
+
+/** Offline: keep the cached wallets and add queued (not yet synced) ones. */
+function mergeQueuedWallets(cached: unknown): WalletRow[] {
+  const base = (Array.isArray(cached) ? cached : []).filter((w: { _isOfflinePending?: boolean }) => !w._isOfflinePending);
+  const ids = new Set(base.map((w: { id: string }) => w.id));
+  const queued = getOutbox()
+    .filter((i) => i.type === "CREATE_WALLET" && i.payload.wallet && !ids.has(i.payload.tempId as string))
+    .map((i) => ({ ...i.payload.wallet, id: i.payload.tempId as string, _isOfflinePending: true }));
+  return [...base, ...queued] as unknown as WalletRow[];
+}
 
 export function useWallets() {
   const { user } = useAuth();
+  const qc = useQueryClient();
   return useQuery({
     queryKey: ["wallets", user?.id],
-    queryFn: async () => {
+    queryFn: async (): Promise<WalletRow[]> => {
       try {
         const { data, error } = await supabase
           .from("wallets")
@@ -20,10 +35,7 @@ export function useWallets() {
         if (error) {
           if (isNetworkError(error)) {
             console.warn("Network error fetching wallets, using offline outbox fallback");
-            const outboxWallets = getOutbox()
-              .filter((i) => i.type === "CREATE_WALLET")
-              .map((i) => ({ ...i.payload.wallet, id: i.payload.tempId, _isOfflinePending: true }));
-            return outboxWallets;
+            return mergeQueuedWallets(qc.getQueryData(["wallets", user?.id]));
           }
           throwIfSupabaseError(error);
         }
@@ -66,21 +78,18 @@ export function useWallets() {
               .select("*")
               .single();
             if (seeded && !seedErr) {
-              return [seeded];
+              return [seeded as WalletRow];
             }
           } catch (seedEx) {
             console.warn("Could not auto-seed initial wallet:", seedEx);
           }
         }
 
-        return combined;
+        return combined as WalletRow[];
       } catch (err: any) {
         if (isNetworkError(err)) {
           console.warn("Network exception fetching wallets, using offline outbox fallback");
-          const outboxWallets = getOutbox()
-            .filter((i) => i.type === "CREATE_WALLET")
-            .map((i) => ({ ...i.payload.wallet, id: i.payload.tempId, _isOfflinePending: true }));
-          return outboxWallets;
+          return mergeQueuedWallets(qc.getQueryData(["wallets", user?.id]));
         }
         throw err;
       }
@@ -174,35 +183,25 @@ export function useUpdateWallet() {
       if (parsed.name !== undefined) updates.name = parsed.name;
       if (parsed.balance !== undefined) updates.balance = parsed.balance;
 
-      // Wallet not synced yet: edit the queued create itself so the change can't be lost.
-      const queuedCreate = findQueuedCreate(id, "CREATE_WALLET");
-      if (queuedCreate?.payload.wallet) {
-        updateOutboxItem(queuedCreate.id, {
-          payload: { ...queuedCreate.payload, wallet: { ...queuedCreate.payload.wallet, ...updates } },
-        });
-        qc.setQueriesData({ queryKey: ["wallets"] }, (old: any) => {
-          if (!Array.isArray(old)) return old;
-          return old.map((w) => (w.id === id ? { ...w, ...updates } : w));
-        });
+      // Offline, still-queued wallet, or network failure: durable outbox item (synced later).
+      if ((typeof navigator !== "undefined" && !navigator.onLine) || findQueuedCreate(id, "CREATE_WALLET")) {
+        handleOfflineUpdateWallet(id, updates, qc);
         return { queued: true };
-      }
-
-      // Wallet edits are not queued offline yet (P1-03). Never pretend they were saved.
-      if (typeof navigator !== "undefined" && !navigator.onLine) {
-        throw new Error("Wallet edits need an internet connection. Please try again when you're online.");
       }
 
       try {
         const { error } = await supabase.from("wallets").update(updates).eq("id", parsed.id);
         if (error) {
           if (isNetworkError(error)) {
-            throw new Error("Couldn't reach the server, so the wallet wasn't updated. Please try again.");
+            handleOfflineUpdateWallet(id, updates, qc);
+            return { queued: true };
           }
           throwIfSupabaseError(error);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (isNetworkError(err)) {
-          throw new Error("Couldn't reach the server, so the wallet wasn't updated. Please try again.");
+          handleOfflineUpdateWallet(id, updates, qc);
+          return { queued: true };
         }
         throw err;
       }
@@ -213,8 +212,10 @@ export function useUpdateWallet() {
       });
       return { queued: false };
     },
-    // Success or failure, re-read the server so the UI never shows an unsaved edit.
-    onSettled: () => qc.invalidateQueries({ queryKey: ["wallets"] }),
+    // Re-read the server after an online save or a failure; queued edits keep their optimistic value.
+    onSettled: (result) => {
+      if (!result?.queued) qc.invalidateQueries({ queryKey: ["wallets"] });
+    },
   });
 }
 

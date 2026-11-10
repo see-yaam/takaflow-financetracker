@@ -53,6 +53,16 @@ function describeItem(item: OutboxItem): { title: string; detail: string } {
       return { title: "Reverse a transaction", detail: "" };
     case "DELETE_WALLET":
       return { title: "Delete a wallet", detail: "" };
+    case "UPDATE_WALLET":
+      return { title: "Edit a wallet", detail: Object.entries(item.payload.updates || {}).map(([k, v]) => `${k}: ${v}`).join(", ") };
+    case "UPDATE_TRANSACTION_CATEGORY":
+      return { title: "Change a category", detail: item.payload.category || "" };
+    case "UPSERT_BUDGET":
+      return { title: `Monthly budget ${item.payload.budget?.month ?? ""}`, detail: `৳${Number(item.payload.budget?.monthly_budget || 0).toLocaleString()}` };
+    case "CREATE_RECURRING":
+      return { title: `Recurring: ${item.payload.recurring?.category ?? ""}`, detail: `Day ${item.payload.recurring?.day_of_month ?? ""}` };
+    case "DELETE_RECURRING":
+      return { title: "Delete a recurring rule", detail: "" };
     default:
       return { title: item.type, detail: "" };
   }
