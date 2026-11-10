@@ -134,17 +134,7 @@ CREATE POLICY "Users can delete own recurring" ON public.recurring_transactions 
 
 CREATE INDEX IF NOT EXISTS idx_recurring_transactions_user_id ON public.recurring_transactions(user_id);
 
--- 7. PASSWORD RESET TOKENS TABLE
-CREATE TABLE IF NOT EXISTS public.password_reset_tokens (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  email TEXT NOT NULL,
-  token TEXT NOT NULL UNIQUE,
-  expires_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  used BOOLEAN NOT NULL DEFAULT false,
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
-);
-
-ALTER TABLE public.password_reset_tokens ENABLE ROW LEVEL SECURITY;
+-- 7. (password_reset_tokens removed: password reset uses Supabase Auth)
 
 -- 8. DEBTS TABLE
 CREATE TABLE IF NOT EXISTS public.debts (
