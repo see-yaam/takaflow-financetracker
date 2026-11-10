@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
@@ -15,7 +16,7 @@ export function useSavingsGoals() {
         .select("*")
         .order("created_at", { ascending: false });
       throwIfSupabaseError(error);
-      return data as any[];
+      return data;
     },
     enabled: !!user,
   });
@@ -40,7 +41,7 @@ export function useCreateSavingsGoal() {
         emoji: goal.emoji,
       });
       const opening = goal.has_opening_balance ? Number(goal.opening_balance || 0) : 0;
-      const insertPayload: any = {
+      const insertPayload: TablesInsert<"savings_goals"> = {
         ...parsed,
         user_id: user!.id,
         has_opening_balance: !!goal.has_opening_balance,

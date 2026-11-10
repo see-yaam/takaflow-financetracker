@@ -18,7 +18,7 @@ export function useStreaks() {
     if (!allTx?.length) return { streak: 0, badges: getDefaultBadges(false, 0, 0, 0) };
 
     // Get unique transaction dates
-    const txDates = new Set(allTx.map((t: any) => t.date));
+    const txDates = new Set(allTx.map((t) => t.date));
     const sortedDates = Array.from(txDates).sort().reverse();
 
     // Calculate current streak
@@ -44,7 +44,7 @@ export function useStreaks() {
 
     // Calculate savings rate for current month
     const currentMonth = format(now, "yyyy-MM");
-    const monthTx = allTx.filter((t: any) => t.date.startsWith(currentMonth));
+    const monthTx = allTx.filter((t) => t.date.startsWith(currentMonth));
     const { income: monthIncome, expense: monthExpense } = sumIncomeExpense(monthTx);
     const savingsRate = monthIncome > 0 ? ((monthIncome - monthExpense) / monthIncome) * 100 : 0;
 

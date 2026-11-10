@@ -80,9 +80,9 @@ export default function SettingsWalletsSection() {
             <div>
               <p className="text-sm font-medium text-foreground">
                 {w.name}
-                {(w as any).currency && (w as any).currency !== "BDT" && (
+                {w.currency && w.currency !== "BDT" && (
                   <span className="ml-2 text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground">
-                    {(w as any).currency}
+                    {w.currency}
                   </span>
                 )}
               </p>

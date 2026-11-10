@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Tables } from "@/integrations/supabase/types";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
-import { parseStrict, walletCreateSchema, walletUpdateSchema } from "@/lib/validations";
+import { walletCreateSchema, walletUpdateSchema } from "@/lib/validations";
 
 import { handleOfflineCreateWallet, handleOfflineDeleteWallet, isNetworkError, getOutbox, removeFromOutbox, findQueuedCreate, handleOfflineUpdateWallet, processOutboxSync, generateUUID } from "@/lib/offlineSync";
 
@@ -56,7 +56,7 @@ export function useWallets() {
 
         const combined = [...(data || [])];
         for (const ow of outboxWallets) {
-          if (!existingIds.has(ow.id)) {
+          if (ow.id && !existingIds.has(ow.id)) {
             combined.push(ow as unknown as (typeof combined)[number]);
           }
         }
@@ -74,7 +74,7 @@ export function useWallets() {
                 currency: "BDT",
                 user_id: user.id,
                 icon: "wallet",
-              } as any)
+              })
               .select("*")
               .single();
             if (seeded && !seedErr) {
@@ -86,7 +86,7 @@ export function useWallets() {
         }
 
         return combined as WalletRow[];
-      } catch (err: any) {
+      } catch (err) {
         if (isNetworkError(err)) {
           console.warn("Network exception fetching wallets, using offline outbox fallback");
           return mergeQueuedWallets(qc.getQueryData(["wallets", user?.id]));
@@ -107,14 +107,16 @@ export function useCreateWallet() {
   return useMutation({
     networkMode: "offlineFirst",
     mutationFn: async ({ name, balance, icon, currency }: { name: string; balance: number; icon?: string; currency?: string }) => {
-      const parsed = parseStrict(walletCreateSchema, { name, balance, icon, currency: currency || "BDT" });
+      const parsed = walletCreateSchema.parse({ name, balance, icon, currency: currency || "BDT" });
       
       let resolvedUserId = user?.id;
       if (!resolvedUserId) {
         try {
           const { data: sessionData } = await supabase.auth.getSession();
           resolvedUserId = sessionData?.session?.user?.id;
-        } catch {}
+        } catch {
+        // best effort: ignore
+      }
       }
 
       if (!resolvedUserId) {
@@ -138,7 +140,7 @@ export function useCreateWallet() {
             icon: parsed.icon || "wallet",
             user_id: resolvedUserId,
             currency: parsed.currency,
-          } as any)
+          })
           .select()
           .single();
 
@@ -149,7 +151,7 @@ export function useCreateWallet() {
           throwIfSupabaseError(error);
         }
         return data;
-      } catch (err: any) {
+      } catch (err) {
         // If network error / failed to fetch, save locally and sync later!
         if (isNetworkError(err)) {
           return handleOfflineCreateWallet(parsed, resolvedUserId, qc);
@@ -157,16 +159,16 @@ export function useCreateWallet() {
         throw err;
       }
     },
-    onSuccess: (data: any) => {
+    onSuccess: (data) => {
       if (data?.id) {
-        qc.setQueriesData({ queryKey: ["wallets"] }, (old: any) => {
+        qc.setQueriesData({ queryKey: ["wallets"] }, (old) => {
           if (!Array.isArray(old)) return [data];
           if (old.some((w) => w.id === data.id)) return old;
           return [...old, data];
         });
       }
       qc.invalidateQueries({ queryKey: ["wallets"] });
-      if (data?._isOfflinePending && typeof navigator !== "undefined" && navigator.onLine) {
+      if ((data as { _isOfflinePending?: boolean } | null)?._isOfflinePending && typeof navigator !== "undefined" && navigator.onLine) {
         processOutboxSync(qc);
       }
     },
@@ -206,7 +208,7 @@ export function useUpdateWallet() {
         throw err;
       }
 
-      qc.setQueriesData({ queryKey: ["wallets"] }, (old: any) => {
+      qc.setQueriesData({ queryKey: ["wallets"] }, (old) => {
         if (!Array.isArray(old)) return old;
         return old.map((w) => (w.id === id ? { ...w, ...updates } : w));
       });
@@ -245,7 +247,7 @@ export function useDeleteWallet() {
           throwIfSupabaseError(error);
         }
         return { id };
-      } catch (err: any) {
+      } catch (err) {
         if (isNetworkError(err)) {
           handleOfflineDeleteWallet(id, qc);
           return { id };
@@ -255,7 +257,7 @@ export function useDeleteWallet() {
     },
     onSuccess: (result) => {
       if (result?.id) {
-        qc.setQueriesData({ queryKey: ["wallets"] }, (old: any) => {
+        qc.setQueriesData({ queryKey: ["wallets"] }, (old) => {
           if (!Array.isArray(old)) return [];
           return old.filter((w) => w.id !== result.id);
         });

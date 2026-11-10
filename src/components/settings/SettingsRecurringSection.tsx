@@ -32,13 +32,13 @@ export default function SettingsRecurringSection() {
         </p>
       ) : (
         <div className="space-y-2">
-          {recurrings.map((r: any) => (
+          {recurrings.map((r) => (
             <div key={r.id} className="flex items-center justify-between py-2 border-b border-border/30 last:border-0">
               <div>
                 <p className="text-sm font-medium text-foreground">{r.category}</p>
                 <p className="text-xs text-muted-foreground">
                   {r.type === "income" ? "+" : "-"}৳{Number(r.amount).toLocaleString()} · Day {r.day_of_month} ·{" "}
-                  {(r as any).wallets?.name}
+                  {(r as { wallets?: { name: string } | null }).wallets?.name}
                   {r.note ? ` · ${r.note}` : ""}
                 </p>
               </div>

@@ -11,11 +11,11 @@ export function useDebts() {
     queryKey: ["debts", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("debts" as any)
+        .from("debts")
         .select("*, wallets(name)")
         .order("created_at", { ascending: false });
       throwIfSupabaseError(error);
-      return data as any[];
+      return data;
     },
     enabled: !!user,
   });
@@ -27,12 +27,12 @@ export function useDebtPayments(debtId: string | null) {
     queryKey: ["debt_payments", debtId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("debt_payments" as any)
+        .from("debt_payments")
         .select("*")
         .eq("debt_id", debtId!)
         .order("date", { ascending: false });
       throwIfSupabaseError(error);
-      return data as any[];
+      return data;
     },
     enabled: !!user && !!debtId,
   });
@@ -44,11 +44,11 @@ export function useAllDebtPayments() {
     queryKey: ["debt_payments_all", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("debt_payments" as any)
+        .from("debt_payments")
         .select("*")
         .order("date", { ascending: false });
       throwIfSupabaseError(error);
-      return data as any[];
+      return data;
     },
     enabled: !!user,
   });
@@ -137,11 +137,11 @@ export function useAllDebtAdditions() {
     queryKey: ["debt_additions_all", user?.id],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("debt_additions" as any)
+        .from("debt_additions")
         .select("*")
         .order("date", { ascending: false });
       throwIfSupabaseError(error);
-      return data as any[];
+      return data;
     },
     enabled: !!user,
   });

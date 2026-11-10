@@ -5,7 +5,7 @@ import { parseBangladeshFinancialSms, ParsedSmsResult } from "@/lib/smsParser";
 import { useWallets } from "@/hooks/useWallets";
 import { useAuth } from "@/contexts/AuthContext";
 import { handleOfflineCreateTransaction, processOutboxSync } from "@/lib/offlineSync";
-import { parseStrict, transactionCreateSchema } from "@/lib/validations";
+import { transactionCreateSchema } from "@/lib/validations";
 import {
   NativeSmsMessage,
   loadIngestState,
@@ -137,7 +137,7 @@ export function useAutoSmsSync() {
           parse: (body, sender) => parseBangladeshFinancialSms(body, sender),
           matchWallet: (parsed) => matchWalletForSms(parsed, currentWallets),
           enqueue: (tx) => {
-            const valid = parseStrict(transactionCreateSchema, tx);
+            const valid = transactionCreateSchema.parse(tx);
             handleOfflineCreateTransaction(valid, userId, qc, { skipSync: true });
           },
           loadState: loadIngestState,

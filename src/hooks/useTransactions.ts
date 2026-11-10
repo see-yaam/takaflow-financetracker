@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
-import { parseStrict, transactionCreateSchema } from "@/lib/validations";
+import { transactionCreateSchema } from "@/lib/validations";
 import {
   handleOfflineCreateTransaction,
   handleOfflineDeleteTransaction,
@@ -102,7 +102,7 @@ export function useTransactions(filters?: TransactionFilters) {
           }
         }
         return combined as TransactionRow[];
-      } catch (err: any) {
+      } catch (err) {
         if (isNetworkError(err)) {
           console.warn("Network exception fetching transactions, using offline outbox fallback");
           const outboxTxs = queuedRowsFor(filters);
@@ -124,7 +124,7 @@ export function useCreateTransaction() {
   return useMutation({
     networkMode: "offlineFirst",
     mutationFn: async (tx: { wallet_id: string; type: string; amount: number; category: string; note?: string; date?: string }) => {
-      const parsed = parseStrict(transactionCreateSchema, {
+      const parsed = transactionCreateSchema.parse({
         ...tx,
         date: tx.date || new Date().toISOString().slice(0, 10),
       });
@@ -134,7 +134,9 @@ export function useCreateTransaction() {
         try {
           const { data: sessionData } = await supabase.auth.getSession();
           resolvedUserId = sessionData?.session?.user?.id;
-        } catch {}
+        } catch {
+        // best effort: ignore
+      }
       }
 
       if (!resolvedUserId) {
@@ -151,7 +153,7 @@ export function useCreateTransaction() {
         const txId = generateUUID();
         const { data, error } = await supabase
           .from("transactions")
-          .insert({ id: txId, ...parsed, user_id: resolvedUserId } as any)
+          .insert({ id: txId, ...parsed, user_id: resolvedUserId })
           .select("*, wallets(name)")
           .single();
 
@@ -162,7 +164,7 @@ export function useCreateTransaction() {
           throwIfSupabaseError(error);
         }
         return data;
-      } catch (err: any) {
+      } catch (err) {
         // Fallback to offline queue if network connection failed
         if (isNetworkError(err)) {
           return handleOfflineCreateTransaction(parsed, resolvedUserId, qc);
@@ -170,8 +172,8 @@ export function useCreateTransaction() {
         throw err;
       }
     },
-    onSuccess: (data: any) => {
-      if (data?._isOfflinePending) {
+    onSuccess: (data) => {
+      if ((data as { _isOfflinePending?: boolean } | null)?._isOfflinePending) {
         if (typeof navigator !== "undefined" && navigator.onLine) {
           processOutboxSync(qc);
         } else {
@@ -203,7 +205,7 @@ export function useDeleteTransaction() {
           }
           throwIfSupabaseError(error);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (isNetworkError(err)) {
           handleOfflineDeleteTransaction(id, qc);
           return;
@@ -231,7 +233,7 @@ export function useReverseTransaction() {
       try {
         const { error } = await supabase
           .from("transactions")
-          .update({ is_reversed: true } as any)
+          .update({ is_reversed: true })
           .eq("id", id);
         if (error) {
           if (isNetworkError(error)) {
@@ -240,7 +242,7 @@ export function useReverseTransaction() {
           }
           throwIfSupabaseError(error);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (isNetworkError(err)) {
           handleOfflineReverseTransaction(id, qc);
           return;

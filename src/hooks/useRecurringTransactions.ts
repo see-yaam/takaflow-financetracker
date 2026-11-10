@@ -18,7 +18,7 @@ export function useRecurringTransactions() {
         .select("*, wallets(name)")
         .order("day_of_month", { ascending: true });
       throwIfSupabaseError(error);
-      return data as any[];
+      return data;
     },
     enabled: !!user,
   });

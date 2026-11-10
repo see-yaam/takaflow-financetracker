@@ -85,7 +85,7 @@ export function useUpdateCustomCategory() {
       if (input.name !== undefined) patch.name = input.name.trim();
       if (input.emoji !== undefined) patch.emoji = input.emoji?.toString().trim() || null;
       if (input.display_order !== undefined) patch.display_order = input.display_order;
-      const { error } = await supabase.from("custom_categories").update(patch as any).eq("id", input.id);
+      const { error } = await supabase.from("custom_categories").update(patch).eq("id", input.id);
       throwIfSupabaseError(error);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["custom_categories"] }),
