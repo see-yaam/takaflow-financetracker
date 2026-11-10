@@ -1,5 +1,5 @@
 import { Outlet, useLocation, Link } from "react-router-dom";
-import { LayoutDashboard, Calendar, BarChart3, Wallet, LogOut, Target, Handshake, User, Mic, List } from "lucide-react";
+import { LayoutDashboard, Calendar, BarChart3, Wallet, LogOut, Target, Handshake, User, Mic, List, Moon } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -17,6 +17,7 @@ const navItems = [
   { to: "/goals", icon: Target, label: "Goals" },
   { to: "/debts", icon: Handshake, label: "Debts" },
   { to: "/reports", icon: BarChart3, label: "Reports" },
+  { to: "/zakat", icon: Moon, label: "Zakat" },
   { to: "/settings", icon: Wallet, label: "Wallet Settings" },
 ];
 
