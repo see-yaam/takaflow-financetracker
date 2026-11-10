@@ -22,6 +22,7 @@ import CategoryPicker from "@/components/CategoryPicker";
 import InsufficientBalanceModal, { AttemptedExpense } from "@/components/InsufficientBalanceModal";
 import { cn } from "@/lib/utils";
 import { CASH_OUT_RATES, computeCashOutFee, isMfsWallet, smsToDraft } from "@/lib/mfs";
+import { scanReceipt } from "@/lib/receiptScan";
 
 interface Props {
   open: boolean;
@@ -46,6 +47,7 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState("");
   const [pasteError, setPasteError] = useState("");
+  const [scanning, setScanning] = useState(false);
   // P2-04: optional MFS cash-out fee, recorded as its own expense
   const [includeFee, setIncludeFee] = useState(false);
   const [feeRate, setFeeRate] = useState<string>(String(CASH_OUT_RATES[1]));
@@ -101,6 +103,29 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
     if (draft.walletId) setWalletId(draft.walletId);
     setPasteError("");
     setPasteOpen(false);
+  };
+
+  // P3-02: receipt photo -> Gemini Vision (scan-receipt Edge Function) -> prefilled form for review.
+  const handleReceipt = async (file: File | undefined) => {
+    if (!file) return;
+    setScanning(true);
+    try {
+      const r = await scanReceipt(file);
+      if (!r.total) {
+        toast.error("Couldn't find a total on this receipt. Please enter it manually.");
+        return;
+      }
+      setType("expense");
+      setAmount(String(r.total));
+      if (r.category) setCategory(r.category);
+      setNote([r.merchant, r.vat ? `VAT ৳${r.vat}` : ""].filter(Boolean).join(" · "));
+      if (r.date) setDate(r.date);
+      toast.success("Receipt read. Check the details, then save.");
+    } catch (e) {
+      toast.error(mapSupabaseError(e));
+    } finally {
+      setScanning(false);
+    }
   };
 
   const handleQuickAddWallet = async () => {
@@ -265,6 +290,21 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
               <span>📋 Paste bKash/Nagad/Bank SMS</span>
               <span>{pasteOpen ? "▲" : "▼"}</span>
             </button>
+            <label className="flex items-center justify-between px-3 py-2 border-t border-border/50 text-xs font-medium text-muted-foreground cursor-pointer">
+              <span>{scanning ? "⏳ Reading receipt…" : "📷 Scan a receipt"}</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                disabled={scanning}
+                aria-label="Scan receipt"
+                onChange={(e) => {
+                  handleReceipt(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
             {pasteOpen && (
               <div className="px-3 pb-3 space-y-2">
                 <textarea
