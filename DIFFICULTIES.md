@@ -5,6 +5,26 @@
 
 ---
 
+## P0 Status (branch `fix/p0-stabilization`, 2026-11-11)
+
+| Item | Status | Proof |
+| :--- | :--- | :--- |
+| §3.2 Badge `clearOutbox()` / §3.4 silent drops / stuck "1 pending" | Fixed | `src/test/offlineSync.test.ts` (failed items kept + Sync Issues dialog) |
+| §3.3 Sign-out wipes queue | Fixed (owner-scoped queue; explicit discard only) | `src/test/authSignOut.test.tsx` |
+| §3.5 Offline reverse balance | Fixed | `offlineSync.test.ts` "reversing a synced transaction offline…" |
+| §3.6 `useUpdateWallet` silent drop | Fixed (no fake success; queued wallets edited in place). Full offline queue = P1-03 | — |
+| §3.1 Native queue cleared before JS commit + double logging | Fixed (two-phase ack, `PendingSmsStore`, dedupe) | `src/test/smsIngest.test.ts`, device checklist |
+| §2.3 Notification anti-scam bypass | Fixed (+ `BROADCAST_SMS` on receiver) | `SenderShieldTest.java` (CI), `smsIngest.test.ts` |
+| §2.1 Keystore in git | Removed from tracking; signing only from GitHub Secrets; key rotated (no lineage) | CI step summary cert |
+| §2.2 `VITE_GEMINI_API_KEY` | Client path removed; Edge Function only (CORS now admits the APK) | `src/test/edgeCors.test.ts` |
+| §2.4 Reset >50 users / CORS / sender | Fixed (paginated lookup, rate limit, atomic token claim, `RESEND_FROM`) | `src/test/findUserByEmail.test.ts` — verified domain still required for arbitrary recipients |
+| §4.3–4.7 Rollover, reversed tx, recurring, drawer, reset | Fixed | `financeMath.test.ts`, `recurring.test.tsx`, `addTransactionDrawer.test.tsx` |
+| §1.2–1.4 config.toml, schema.sql, lockfiles | Fixed (+ FK migration `20261111120000_user_fk_cascade.sql`) | — |
+
+Corrections to the original audit: `npx tsc --noEmit` never type-checked anything (root `files: []`); the real check (`npm run typecheck`) found 9 errors, now fixed. The Vite timestamp file *was* committed (in `2a5a719`); it is now removed and ignored. There is no "Quick Demo Login" in `Login.tsx`.
+
+---
+
 ## Executive Risk Summary
 
 While **TakaFlow** has an impressive feature set (`101/101` Vitest unit tests pass and Vite builds cleanly), the repository has **critical structural, offline-sync, security, and transactional atomicity flaws** that explain real user-facing pain points—including transactions stuck `"1 pending"` while online, silent data loss during sync/sign-out/SMS ingest, and broken multi-step mutations.
@@ -196,7 +216,7 @@ Verified on 2026-11-10: `eslint .` exits with code `1`:
 
 ### `[LOW]` 6.3 Missing Dedicated `/transactions` Ledger Page, Export & Onboarding Cleanup
 - [`Dashboard.tsx:424`](src/pages/Dashboard.tsx#L424) only displays `transactions.slice(0, 10)` for the current month; there is **no dedicated searchable/filterable `/transactions` route** or CSV/PDF export (`TKF-02` in `ROADMAP.md`).
-- [`Login.tsx`](src/pages/Login.tsx) still contains a `"Quick Demo Login"` UX check/flow (verify whether intended for staging only or production).
+- ~~[`Login.tsx`](src/pages/Login.tsx) still contains a `"Quick Demo Login"` UX check/flow~~ — verified 2026-11-11: no demo login or auth bypass exists anywhere in `src/` or `supabase/` (the static "Interactive Demo" preview on `LandingPage.tsx` is intentional).
 - **No PWA Service Worker / Web Manifest** (`vite-plugin-pwa`): Web users lose offline HTML/JS shell loading (unlike the Capacitor APK which bundles `dist/`).
 - **Large Main Bundle**: `dist/assets/index-*.js` is **786.27 kB** (`232.55 kB` gzip) because vendor libraries (React, Supabase, Framer Motion, Zod, Radix) aren't split via Vite `manualChunks`.
 - **Unused / Dead Code**: [`src/hooks/useStreaks.ts`](src/hooks/useStreaks.ts) and [`src/components/StreakBadge.tsx`](src/components/StreakBadge.tsx) exist in the repo alongside [`src/components/settings/SettingsAccountSection.tsx`](src/components/settings/SettingsAccountSection.tsx) & `SettingsDangerZone.tsx`, which were largely superseded by [`ProfilePage.tsx`](src/pages/ProfilePage.tsx).
