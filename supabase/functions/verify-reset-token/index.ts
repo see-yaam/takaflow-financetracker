@@ -1,12 +1,9 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { corsHeadersFor } from "../_shared/cors.ts";
+import { findUserByEmail } from "../_shared/findUserByEmail.ts";
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req.headers.get("Origin"), Deno.env.get("ALLOWED_ORIGIN"));
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -32,42 +29,35 @@ Deno.serve(async (req) => {
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Look up token
-    const { data: tokenRow, error: fetchError } = await supabase
+    // Atomically claim the token: only one request can flip used=false -> true,
+    // and only while it is unexpired. This closes the double-use race.
+    const { data: tokenRow, error: claimError } = await supabase
       .from("password_reset_tokens")
-      .select("*")
+      .update({ used: true })
       .eq("token", token)
       .eq("used", false)
-      .single();
+      .gt("expires_at", new Date().toISOString())
+      .select("id, email")
+      .maybeSingle();
 
-    if (fetchError || !tokenRow) {
+    if (claimError || !tokenRow) {
       return new Response(
-        JSON.stringify({ error: "Invalid or expired reset link" }),
+        JSON.stringify({ error: "Invalid or expired reset link. Please request a new one." }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Check expiry
-    if (new Date(tokenRow.expires_at) < new Date()) {
-      // Mark as used
-      await supabase
-        .from("password_reset_tokens")
-        .update({ used: true })
-        .eq("id", tokenRow.id);
+    const releaseToken = () =>
+      supabase.from("password_reset_tokens").update({ used: false }).eq("id", tokenRow.id);
 
-      return new Response(
-        JSON.stringify({ error: "Reset link has expired. Please request a new one." }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Find user by email across ALL pages (listUsers() alone only returns the first 50).
+    let user;
+    try {
+      user = await findUserByEmail(supabase.auth.admin, tokenRow.email);
+    } catch (lookupError) {
+      await releaseToken(); // let the user retry the same link
+      throw lookupError;
     }
-
-    // Find user by email
-    const { data: users, error: listError } = await supabase.auth.admin.listUsers();
-    if (listError) throw listError;
-
-    const user = users.users.find(
-      (u: { email?: string }) => u.email?.toLowerCase() === tokenRow.email.toLowerCase()
-    );
 
     if (!user) {
       return new Response(
@@ -76,19 +66,16 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Update password
+    // Update password; if it fails, release the token so the same link can be retried.
     const { error: updateError } = await supabase.auth.admin.updateUserById(
       user.id,
       { password }
     );
 
-    if (updateError) throw updateError;
-
-    // Mark token as used
-    await supabase
-      .from("password_reset_tokens")
-      .update({ used: true })
-      .eq("id", tokenRow.id);
+    if (updateError) {
+      await releaseToken();
+      throw updateError;
+    }
 
     return new Response(
       JSON.stringify({ message: "Password updated successfully!" }),
