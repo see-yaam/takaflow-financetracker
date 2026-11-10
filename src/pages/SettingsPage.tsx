@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import BillRemindersSetting from "@/components/settings/BillRemindersSetting";
 import SettingsWalletsSection from "@/components/settings/SettingsWalletsSection";
 import SettingsTransferSection from "@/components/settings/SettingsTransferSection";
 import SettingsRecurringSection from "@/components/settings/SettingsRecurringSection";
@@ -43,6 +44,7 @@ export default function SettingsPage() {
       <SettingsWalletsSection />
       <SettingsTransferSection />
       <SettingsRecurringSection />
+      <BillRemindersSetting />
       <SettingsCategoriesSection />
     </div>
   );

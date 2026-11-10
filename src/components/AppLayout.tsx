@@ -6,6 +6,7 @@ import { useState } from "react";
 import SignOutConfirmDialog from "@/components/SignOutConfirmDialog";
 import VoiceTransactionModal from "@/components/voice/VoiceTransactionModal";
 import { useAutoSmsSync } from "@/hooks/useAutoSmsSync";
+import { useBillReminderSync } from "@/hooks/useBillReminderSync";
 import OfflineSyncBadge from "@/components/OfflineSyncBadge";
 import SyncIssuesDialog from "@/components/SyncIssuesDialog";
 import SmsPermissionBanner from "@/components/SmsPermissionBanner";
@@ -40,6 +41,8 @@ export default function AppLayout() {
 
   // Background SMS Sync for Mobile Native Environment
   useAutoSmsSync();
+  // Native bill reminders 48 h before recurring expenses
+  useBillReminderSync();
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-background">
