@@ -37,6 +37,9 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Type check
+        run: npm run typecheck
+
       - name: Build Web Assets (Vite)
         run: npm run build
 
@@ -60,7 +63,32 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x android/gradlew
 
+      - name: Prepare release signing key
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/release.keystore"
+            echo "TAKAFLOW_KEYSTORE_PATH=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+            echo "Release keystore decoded from secrets."
+          elif [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 secret is missing; refusing to build an unsigned release on main."
+            exit 1
+          else
+            echo "::warning::Signing secrets unavailable; this PR build will produce an UNSIGNED APK."
+          fi
+
+      - name: Android unit tests (JVM)
+        run: |
+          set -o pipefail
+          cd android
+          ./gradlew :app:testDebugUnitTest --stacktrace 2>&1 | tee ../gradle-test.log
+
       - name: Build Android Release APK
+        env:
+          TAKAFLOW_KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASS }}
+          TAKAFLOW_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          TAKAFLOW_KEY_PASSWORD: ${{ secrets.KEY_PASS }}
         run: |
           set -o pipefail
           cd android
@@ -71,48 +99,52 @@ jobs:
         run: |
           echo "### ❌ Build Failed" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
-          tail -n 80 gradle-build.log >> $GITHUB_STEP_SUMMARY || true
+          tail -n 80 gradle-build.log >> $GITHUB_STEP_SUMMARY 2>/dev/null || tail -n 80 gradle-test.log >> $GITHUB_STEP_SUMMARY || true
           echo '```' >> $GITHUB_STEP_SUMMARY
           grep -E "(FAILURE:|What went wrong:|Caused by:|error:)" -A 1 gradle-build.log | head -n 25 | while IFS= read -r line; do
             echo "::error title=Gradle Error::$line"
           done || true
 
-      - name: Locate and Package APK
+      - name: Locate, verify and package APK
         if: success()
         run: |
-          echo "Listing all built APK files:"
-          find android/ -name "*.apk" -ls
-          if [ -f "android/app/build/outputs/apk/release/app-release.apk" ]; then
-            APK_PATH="android/app/build/outputs/apk/release/app-release.apk"
-          elif [ -f "android/app/build/outputs/apk/debug/app-debug.apk" ]; then
-            APK_PATH="android/app/build/outputs/apk/debug/app-debug.apk"
+          OUT=android/app/build/outputs/apk/release
+          ls -l "$OUT" || true
+          if [ -f "$OUT/app-release.apk" ]; then
+            APK_PATH="$OUT/app-release.apk"
+          elif [ -f "$OUT/app-release-unsigned.apk" ] && [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::warning::Packaging UNSIGNED release APK (PR build without signing secrets). It cannot be installed."
+            APK_PATH="$OUT/app-release-unsigned.apk"
           else
-            APK_PATH=$(find android/ -name "*.apk" | head -n 1)
-          fi
-          if [ -z "$APK_PATH" ] || [ ! -f "$APK_PATH" ]; then
-            echo "::error::No APK file found in android/ directory!"
+            echo "::error::Signed release APK not found at $OUT/app-release.apk"
             exit 1
           fi
-          echo "Using APK at: $APK_PATH"
           cp "$APK_PATH" TakaFlow.apk
           ls -lh TakaFlow.apk
 
-          echo "Finding apksigner tool..."
-          APKSIGNER=$(find $ANDROID_HOME/build-tools -name "apksigner" | sort -V | tail -n 1)
-          if [ -n "$APKSIGNER" ] && [ -x "$APKSIGNER" ]; then
-            echo "Signing APK with apksigner at: $APKSIGNER"
-            $APKSIGNER sign --ks android/app/release.keystore --ks-pass pass:takaflow123 --ks-key-alias takaflow --key-pass pass:takaflow123 --v1-signing-enabled true --v2-signing-enabled true --v3-signing-enabled true TakaFlow.apk
-            echo "Verifying APK signature..."
-            $APKSIGNER verify --verbose --print-certs TakaFlow.apk > apk-verify.txt 2>&1 || true
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name "apksigner" | sort -V | tail -n 1)
+          echo "### 🔐 APK Signature Verification" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$APKSIGNER" ] && "$APKSIGNER" verify --verbose --print-certs TakaFlow.apk > apk-verify.txt 2>&1; then
             cat apk-verify.txt
-            echo "### 🔐 APK Signature Verification" >> $GITHUB_STEP_SUMMARY
-            echo '```text' >> $GITHUB_STEP_SUMMARY
-            cat apk-verify.txt >> $GITHUB_STEP_SUMMARY
-            echo '```' >> $GITHUB_STEP_SUMMARY
+            cat apk-verify.txt >> "$GITHUB_STEP_SUMMARY"
+          else
+            cat apk-verify.txt 2>/dev/null || true
+            echo "APK is not signed (or apksigner unavailable)." >> "$GITHUB_STEP_SUMMARY"
+            if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              echo "::error::APK signature verification failed on main."
+              exit 1
+            fi
           fi
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
 
-          echo "### 📱 TakaFlow Android APK Ready!" >> $GITHUB_STEP_SUMMARY
-          echo "Successfully built and verified signed release \`TakaFlow.apk\`." >> $GITHUB_STEP_SUMMARY
+      - name: Read app version
+        if: success()
+        id: version
+        run: |
+          VER=$(grep -oP 'versionName\s+"\K[^"]+' android/app/build.gradle)
+          echo "name=$VER" >> "$GITHUB_OUTPUT"
+          echo "App version: $VER"
 
       - name: Upload build log on failure
         if: failure()
@@ -130,20 +162,34 @@ jobs:
           path: TakaFlow.apk
           retention-days: 30
 
-      - name: Publish Direct APK Download Release
+      - name: Check whether this version is already released
         if: github.ref == 'refs/heads/main' && success()
+        id: relcheck
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if gh release view "v${{ steps.version.outputs.name }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Release v${{ steps.version.outputs.name }} already exists; skipping publish. Bump versionName in android/app/build.gradle to publish a new release."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish Direct APK Download Release
+        if: github.ref == 'refs/heads/main' && success() && steps.relcheck.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v1.0.7
-          name: "TakaFlow v1.0.7 (Offline Sync, Walkie-Talkie Voice Mic, Profile Cropper)"
+          tag_name: v${{ steps.version.outputs.name }}
+          target_commitish: ${{ github.sha }}
+          name: "TakaFlow v${{ steps.version.outputs.name }}"
           body: |
-            ### 📱 TakaFlow Android v1.0.7
-            - **⚡ Complete Offline-First Two-Way Sync**: Use TakaFlow without internet permanently with TanStack Query permanent caching and local Outbox Queue. Auto-syncs to cloud when connected.
-            - **🎙️ Press & Hold Walkie-Talkie Microphone**: Hold thumb to speak with haptic vibration, release to immediately save. Features high-precision Bengali NLP note cleaning and Income/Expense parsing.
-            - **🖼️ Facebook-style Profile Photo Tool**: Drag-to-pan, 1x-3x zoom, 90° rotation, and circular crop with support for iPhone 10MB HEIC photos.
-            - **🔄 In-App 1-Tap Auto Updater**: Seamless in-app download and installation directly from GitHub Releases.
+            ### 📱 TakaFlow Android v${{ steps.version.outputs.name }}
+            - **🔐 New signing key**: This release is signed with a new key. Before installing, open your current TakaFlow while online and make sure it shows no pending changes, then uninstall the old version and install this one.
+            - **🛡️ No silent data loss**: Offline changes and captured SMS/notifications are kept until they are safely saved; failed syncs are shown for review instead of being dropped.
+            - **🚫 Anti-scam shield**: Notifications from personal phone numbers and unknown senders are no longer auto-recorded.
+            - **🔁 Recurring catch-up**: Missed recurring entries are added automatically on their due dates.
             - **Direct Download**:
-              - **[Download TakaFlow.apk](https://github.com/see-yaam/takaflow-financetracker/releases/download/v1.0.7/TakaFlow.apk)**
+              - **[Download TakaFlow.apk](https://github.com/see-yaam/takaflow-financetracker/releases/download/v${{ steps.version.outputs.name }}/TakaFlow.apk)**
           files: TakaFlow.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

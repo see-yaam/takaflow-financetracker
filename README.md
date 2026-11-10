@@ -98,7 +98,7 @@ supabase db push
 | `npm run preview` | Preview production build | Working |
 | `npm test` | Run Vitest unit suite (`vitest run`) | Passing (`101/101` across 8 test files) |
 | `npm run test:watch` | Run Vitest in watch mode | Working |
-| `npx tsc --noEmit` | TypeScript typecheck (`strict: false`) | Passing (`0` errors) |
+| `npm run typecheck` | TypeScript typecheck of app + tooling configs (`strict: false`) | Passing (`0` errors) |
 | `npm run lint` | Run ESLint across workspace | **Failing (`188` issues: `178` errors, `10` warnings)** — see [`DIFFICULTIES.md`](DIFFICULTIES.md#61-npm-run-lint-fails-with-188-issues-178-errors-10-warnings) |
 
 ---

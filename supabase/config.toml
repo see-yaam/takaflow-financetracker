@@ -1,4 +1,4 @@
-project_id = "cpngaqkjvimrismpxoeg"
+project_id = "rnzofkinmetxedimdbdv"
 
 [functions.ai-insights]
 verify_jwt = true
@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.verify-reset-token]
 verify_jwt = false
+
+[functions.ai-parse-voice]
+verify_jwt = true

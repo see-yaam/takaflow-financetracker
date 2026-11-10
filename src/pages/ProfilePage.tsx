@@ -346,6 +346,7 @@ export default function ProfilePage() {
         "recurring_transactions",
         "budget_goals",
         "savings_goals",
+        "custom_categories",
         "transactions",
         "wallets",
       ] as const;
@@ -355,8 +356,10 @@ export default function ProfilePage() {
         throwIfSupabaseError(error);
       }
 
-      await queryClient.clear();
-      await signOut();
+      queryClient.clear();
+      // The data was just deleted on purpose: drop this user's queued offline changes too,
+      // otherwise they would re-create deleted rows on the next sync.
+      await signOut({ discardOfflineChanges: true });
 
       toast.success("Account reset successfully. Starting fresh!");
       setResetOpen(false);

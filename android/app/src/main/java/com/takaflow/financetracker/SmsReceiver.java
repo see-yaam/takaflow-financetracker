@@ -3,37 +3,19 @@ package com.takaflow.financetracker;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.telephony.SmsMessage;
 import android.util.Log;
-import java.util.regex.Pattern;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 /**
- * Universal SMS BroadcastReceiver for Bangladeshi Banks and MFS Providers.
- * WITH STRICT ANTI-FRAUD AND PERSONAL NUMBER BLOCKING.
+ * Universal SMS BroadcastReceiver for Bangladeshi Banks and MFS Providers,
+ * with strict anti-fraud and personal-number blocking (see SenderShield).
  *
- * Scammers often send fake SMS from regular SIM cards (+88017..., 018..., 019...).
- * This receiver strictly blocks any personal phone number and only processes
- * SMS from registered BTRC alphanumeric bank masks or official banking shortcodes.
+ * The manifest requires android.permission.BROADCAST_SMS for this receiver, so
+ * only the system telephony stack can deliver SMS_RECEIVED to it.
  */
 public class SmsReceiver extends BroadcastReceiver {
     private static final String TAG = "TakaFlowSmsReceiver";
-    private static final String PREF_NAME = "takaflow_pending_sms";
-    private static final String KEY_PENDING_TX = "pending_transactions";
-
-    // Pattern detecting personal mobile numbers (+8801..., 8801..., 01...)
-    private static final Pattern PERSONAL_PHONE_PATTERN = Pattern.compile(
-        "^(\\+?88)?01[3-9]\\d{8}$"
-    );
-
-    // Official BTRC Alphanumeric Sender Masks & Shortcodes
-    private static final Pattern OFFICIAL_BANK_PATTERN = Pattern.compile(
-        "^(bKash|NAGAD|Rocket|16216|16247|16167|16234|16221|16230|16233|IBBL|CELLFIN|DBBL|BRACBANK|CITYBANK|EBL|SCB|SONALI|SONALIBANK|UPAY|PUBALI|PRIMEBANK|TRUSTBANK|MIDLAND|DHAKABANK|BANKASIA|COMMUNITY|EXIM|SIBL|SJIBL|MBL|ONEBANK|PREMIER|SOUTHEAST|NCCB|MUTUALTRUST|MTBL|JAMUNA|STANDARDBANK|IFIC|UCB|SHAHJALAL|ALARAFAH|AIBL|JANATA|AGRANI|RUPALI|HSBC)",
-        Pattern.CASE_INSENSITIVE
-    );
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -50,6 +32,7 @@ public class SmsReceiver extends BroadcastReceiver {
 
         StringBuilder fullBody = new StringBuilder();
         String sender = "";
+        long timestamp = 0;
 
         for (Object pdu : pdus) {
             SmsMessage sms;
@@ -60,7 +43,12 @@ public class SmsReceiver extends BroadcastReceiver {
             }
 
             if (sms != null) {
-                sender = sms.getDisplayOriginatingAddress();
+                if (sender == null || sender.isEmpty()) {
+                    sender = sms.getDisplayOriginatingAddress();
+                }
+                if (timestamp == 0) {
+                    timestamp = sms.getTimestampMillis();
+                }
                 fullBody.append(sms.getMessageBody());
             }
         }
@@ -69,50 +57,26 @@ public class SmsReceiver extends BroadcastReceiver {
             return;
         }
 
-        String cleanSender = sender.trim().replaceAll("[\\s\\-()]", "");
-
-        // 🛡️ SECURITY SHIELD 1: Drop any SMS originating from a personal mobile phone number
-        if (PERSONAL_PHONE_PATTERN.matcher(cleanSender).matches() || cleanSender.matches("^\\+?\\d{10,}$")) {
-            Log.w(TAG, "[ANTI-SCAM SHIELD] Rejected fake/unauthorized financial SMS from personal number: " + sender);
-            return; // Never process scam messages from personal SIM numbers
-        }
-
-        // 🛡️ SECURITY SHIELD 2: Must match an official bank mask or official shortcode
-        // cleanSender has all hyphens/spaces removed: e.g. BRAC-BANK -> BRACBANK
-        boolean isOfficialBank = OFFICIAL_BANK_PATTERN.matcher(cleanSender).find() || OFFICIAL_BANK_PATTERN.matcher(sender.trim()).find();
-        if (!isOfficialBank) {
-            Log.w(TAG, "[ANTI-SCAM SHIELD] Rejected SMS from unregistered/unofficial sender: " + sender);
+        // 🛡️ Shield 1: never accept a personal phone number (SIM-based fake MFS SMS)
+        if (SenderShield.isPersonalNumber(sender)) {
+            Log.w(TAG, "[ANTI-SCAM SHIELD] Rejected financial-looking SMS from a personal number");
             return;
         }
 
-        String messageText = fullBody.toString();
-
-        // 🛡️ SECURITY SHIELD 3: Must contain financial keywords (English & Bangla)
-        boolean hasFinancialKeywords = messageText.matches("(?i)[\\s\\S]*(Tk\\.?|BDT|৳|debited|credited|paid|payment|received|cash out|cash in|send money|balance|টাকা|পেমেন্ট|পাঠানো|পেয়েছেন|ক্যাশ|উত্তোলন|জমা|ব্যালেন্স|রিচার্জ|খরচ|সফল|গৃহীত)[\\s\\S]*");
-
-        if (hasFinancialKeywords) {
-            Log.i(TAG, "[VERIFIED OFFICIAL SMS] Captured message from: " + sender);
-            storeParsedTransaction(context, sender, messageText);
+        // 🛡️ Shield 2: must be an official bank/MFS mask or short code
+        if (!SenderShield.isOfficialSender(sender)) {
+            Log.w(TAG, "[ANTI-SCAM SHIELD] Rejected SMS from an unregistered sender");
+            return;
         }
-    }
 
-    private void storeParsedTransaction(Context context, String sender, String text) {
-        try {
-            SharedPreferences prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-            String existingJson = prefs.getString(KEY_PENDING_TX, "[]");
-            JSONArray array = new JSONArray(existingJson);
+        // 🛡️ Shield 3: must look like a financial transaction (English & Bangla)
+        String messageText = fullBody.toString();
+        if (!SenderShield.hasFinancialKeyword(messageText)) {
+            return;
+        }
 
-            JSONObject tx = new JSONObject();
-            tx.put("sender", sender);
-            tx.put("body", text);
-            tx.put("timestamp", System.currentTimeMillis());
-
-            array.put(tx);
-
-            prefs.edit().putString(KEY_PENDING_TX, array.toString()).apply();
-            Log.i(TAG, "Successfully captured and verified official financial SMS for TakaFlow.");
-        } catch (Exception e) {
-            Log.e(TAG, "Error storing verified financial SMS", e);
+        if (PendingSmsStore.enqueue(context, sender, messageText, timestamp, "sms")) {
+            Log.i(TAG, "Captured verified official financial SMS");
         }
     }
 }

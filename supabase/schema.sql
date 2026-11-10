@@ -1,6 +1,8 @@
 -- ==============================================================================
 -- TAKAFLOW FINANCE TRACKER - COMPLETE DATABASE SCHEMA
 -- Copy and paste this entire script into your Supabase SQL Editor and click RUN
+-- Snapshot for bootstrapping a FRESH database. The authoritative history is
+-- supabase/migrations/ (keep this file in sync when adding a migration).
 -- ==============================================================================
 
 -- 1. WALLETS TABLE
@@ -69,7 +71,7 @@ CREATE INDEX IF NOT EXISTS idx_budget_goals_user_month ON public.budget_goals(us
 -- 4. MONTHLY SNAPSHOTS TABLE
 CREATE TABLE IF NOT EXISTS public.monthly_snapshots (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   wallet_id UUID NOT NULL REFERENCES public.wallets(id) ON DELETE CASCADE,
   month TEXT NOT NULL,
   opening_balance NUMERIC NOT NULL DEFAULT 0,
@@ -88,13 +90,15 @@ CREATE POLICY "Users can update own snapshots" ON public.monthly_snapshots FOR U
 -- 5. SAVINGS GOALS TABLE
 CREATE TABLE IF NOT EXISTS public.savings_goals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   target_amount NUMERIC NOT NULL,
   saved_amount NUMERIC NOT NULL DEFAULT 0,
   deadline DATE,
   emoji TEXT DEFAULT '🫙',
   completed BOOLEAN NOT NULL DEFAULT false,
+  opening_balance NUMERIC NOT NULL DEFAULT 0,
+  has_opening_balance BOOLEAN NOT NULL DEFAULT false,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -110,7 +114,7 @@ CREATE INDEX IF NOT EXISTS idx_savings_goals_user_id ON public.savings_goals(use
 -- 6. RECURRING TRANSACTIONS TABLE
 CREATE TABLE IF NOT EXISTS public.recurring_transactions (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   wallet_id UUID NOT NULL REFERENCES public.wallets(id) ON DELETE CASCADE,
   type TEXT NOT NULL,
   amount NUMERIC NOT NULL,
@@ -145,7 +149,7 @@ ALTER TABLE public.password_reset_tokens ENABLE ROW LEVEL SECURITY;
 -- 8. DEBTS TABLE
 CREATE TABLE IF NOT EXISTS public.debts (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   type TEXT NOT NULL CHECK (type IN ('borrowed', 'lent')),
   person_name TEXT NOT NULL,
   amount NUMERIC NOT NULL,
@@ -170,7 +174,7 @@ CREATE INDEX IF NOT EXISTS idx_debts_user_id ON public.debts(user_id);
 CREATE TABLE IF NOT EXISTS public.debt_payments (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   debt_id UUID REFERENCES public.debts(id) ON DELETE CASCADE NOT NULL,
-  user_id UUID NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   amount NUMERIC NOT NULL,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   note TEXT,
@@ -190,7 +194,7 @@ CREATE TABLE IF NOT EXISTS public.debt_additions (
   id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
   debt_id UUID NOT NULL REFERENCES public.debts(id) ON DELETE CASCADE,
   wallet_id UUID REFERENCES public.wallets(id),
-  user_id UUID NOT NULL,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   amount NUMERIC NOT NULL,
   date DATE NOT NULL DEFAULT CURRENT_DATE,
   note TEXT,
@@ -203,8 +207,30 @@ CREATE POLICY "Users can view their own debt additions" ON public.debt_additions
 CREATE POLICY "Users can create their own debt additions" ON public.debt_additions FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can delete their own debt additions" ON public.debt_additions FOR DELETE USING (auth.uid() = user_id);
 
+-- 11. CUSTOM CATEGORIES TABLE
+CREATE TABLE IF NOT EXISTS public.custom_categories (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  emoji TEXT,
+  display_order INTEGER NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON public.custom_categories TO authenticated;
+GRANT ALL ON public.custom_categories TO service_role;
+
+ALTER TABLE public.custom_categories ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users view own categories" ON public.custom_categories FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users insert own categories" ON public.custom_categories FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users update own categories" ON public.custom_categories FOR UPDATE USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users delete own categories" ON public.custom_categories FOR DELETE USING (auth.uid() = user_id);
+
+CREATE INDEX IF NOT EXISTS idx_custom_categories_user_order ON public.custom_categories(user_id, display_order);
+
 -- ==============================================================================
--- 11. FUNCTIONS & TRIGGERS
+-- 12. FUNCTIONS & TRIGGERS
 -- ==============================================================================
 
 -- Transaction Insert: update wallet balance (skips if reversed)

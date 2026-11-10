@@ -7,6 +7,15 @@ const monthString = z.string().regex(/^\d{4}-\d{2}$/, "Invalid month");
 const uuid = z.string().uuid("Invalid selection");
 const idSchema = z.string().trim().min(1, "Invalid selection");
 
+/**
+ * zod infers every key as optional while tsconfig has strictNullChecks off.
+ * parseStrict re-asserts the schema's real (required) shape at the type level.
+ * Remove once P1-04 enables strict mode and plain schema.parse() is typed correctly.
+ */
+export function parseStrict<S extends z.ZodTypeAny>(schema: S, data: unknown): Required<z.infer<S>> {
+  return schema.parse(data) as Required<z.infer<S>>;
+}
+
 export const walletCreateSchema = z.object({
   name: z.string().trim().min(1, "Wallet name is required").max(100),
   balance: nonNegativeAmount,
@@ -36,6 +45,7 @@ export const recurringCreateSchema = z.object({
   category: z.string().trim().min(1, "Category is required").max(100),
   note: z.string().trim().max(500).optional(),
   day_of_month: z.number().int().min(1).max(31),
+  last_applied_month: monthString.optional(),
 });
 
 export const budgetGoalSchema = z.object({

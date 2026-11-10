@@ -4,6 +4,9 @@ import { useAuth } from "@/contexts/AuthContext";
 import { format } from "date-fns";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
 import { recurringCreateSchema } from "@/lib/validations";
+import { dueOccurrences, recurringTxId } from "@/lib/recurring";
+import { isNetworkError } from "@/lib/offlineSync";
+import { toast } from "sonner";
 
 export function useRecurringTransactions() {
   const { user } = useAuth();
@@ -25,7 +28,16 @@ export function useCreateRecurring() {
   const qc = useQueryClient();
   const { user } = useAuth();
   return useMutation({
-    mutationFn: async (r: { wallet_id: string; type: string; amount: number; category: string; note?: string; day_of_month: number }) => {
+    mutationFn: async (r: {
+      wallet_id: string;
+      type: string;
+      amount: number;
+      category: string;
+      note?: string;
+      day_of_month: number;
+      /** Month already covered by the transaction created together with this rule. */
+      last_applied_month?: string;
+    }) => {
       const parsed = recurringCreateSchema.parse(r);
       const { data, error } = await supabase
         .from("recurring_transactions")
@@ -55,45 +67,72 @@ export function useApplyRecurring() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async () => {
-      if (!user) return;
-      const today = new Date();
-      const dayOfMonth = today.getDate();
-      const currentMonth = format(today, "yyyy-MM");
+    /**
+     * Applies every due occurrence that hasn't been applied yet, including missed
+     * days, short months (31st -> 28th/30th) and whole missed months (back-filled,
+     * at most 12 per rule, never before the rule existed).
+     *
+     * Idempotent: each occurrence gets a deterministic id, so a second tab/device
+     * (or a retry after a crash) hits the primary key instead of duplicating, and
+     * last_applied_month only ever moves forward.
+     */
+    mutationFn: async (): Promise<{ created: Array<{ category: string; month: string }> }> => {
+      const created: Array<{ category: string; month: string }> = [];
+      if (!user) return { created };
+      // Online only: a missed run is simply caught up on a later Dashboard visit.
+      if (typeof navigator !== "undefined" && !navigator.onLine) return { created };
 
-      const { data: recurrings, error: fetchError } = await supabase
-        .from("recurring_transactions")
-        .select("*")
-        .eq("day_of_month", dayOfMonth);
+      const { data: rules, error: fetchError } = await supabase.from("recurring_transactions").select("*");
       throwIfSupabaseError(fetchError);
 
-      if (!recurrings?.length) return;
+      const today = new Date();
+      for (const r of rules || []) {
+        for (const occ of dueOccurrences(r, today)) {
+          const { error: insertError } = await supabase.from("transactions").insert({
+            id: recurringTxId(r.id, occ.month),
+            user_id: user.id,
+            wallet_id: r.wallet_id,
+            type: r.type,
+            amount: r.amount,
+            category: r.category,
+            note: r.note ? `${r.note} (recurring)` : "Recurring transaction",
+            date: occ.date,
+          });
+          if (insertError && insertError.code !== "23505") {
+            // Network failures stop here and are retried next time; nothing is marked applied.
+            if (isNetworkError(insertError)) return { created };
+            throwIfSupabaseError(insertError);
+          }
+          if (!insertError) created.push({ category: r.category, month: occ.month });
 
-      for (const r of recurrings) {
-        if (r.last_applied_month === currentMonth) continue;
-
-        const { error: insertError } = await supabase.from("transactions").insert({
-          user_id: user.id,
-          wallet_id: r.wallet_id,
-          type: r.type,
-          amount: r.amount,
-          category: r.category,
-          note: r.note ? `${r.note} (recurring)` : "Recurring transaction",
-          date: format(today, "yyyy-MM-dd"),
-        });
-        throwIfSupabaseError(insertError);
-
-        const { error: updateError } = await supabase
-          .from("recurring_transactions")
-          .update({ last_applied_month: currentMonth })
-          .eq("id", r.id);
-        throwIfSupabaseError(updateError);
+          // Advance the marker only forward (another device may already be ahead).
+          const { error: updateError } = await supabase
+            .from("recurring_transactions")
+            .update({ last_applied_month: occ.month })
+            .eq("id", r.id)
+            .or(`last_applied_month.is.null,last_applied_month.lt.${occ.month}`);
+          if (updateError && isNetworkError(updateError)) return { created };
+          throwIfSupabaseError(updateError);
+        }
       }
+      return { created };
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       qc.invalidateQueries({ queryKey: ["transactions"] });
       qc.invalidateQueries({ queryKey: ["wallets"] });
       qc.invalidateQueries({ queryKey: ["recurring_transactions"] });
+      const created = result?.created ?? [];
+      if (created.length > 0) {
+        const monthName = (m: string) => format(new Date(`${m}-01T00:00:00`), "MMM yyyy");
+        const byCategory = new Map<string, string[]>();
+        for (const c of created) byCategory.set(c.category, [...(byCategory.get(c.category) ?? []), monthName(c.month)]);
+        const summary = [...byCategory].map(([cat, months]) => `${cat} (${months.join(", ")})`).join("; ");
+        toast.success(
+          `Added ${created.length} recurring ${created.length === 1 ? "entry" : "entries"}: ${summary}`,
+          { duration: 7000 }
+        );
+      }
     },
+    onError: (err) => console.error("Applying recurring transactions failed:", err),
   });
 }

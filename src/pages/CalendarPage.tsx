@@ -31,12 +31,13 @@ export default function CalendarPage() {
   const startPadding = getDay(monthStart);
 
   const txByDate = useMemo(() => {
-    return (transactions || []).reduce((acc, t) => {
+    type CalendarTx = NonNullable<typeof transactions>[number];
+    return (transactions || []).reduce<Record<string, CalendarTx[]>>((acc, t) => {
       const d = t.date;
       if (!acc[d]) acc[d] = [];
       acc[d].push(t);
       return acc;
-    }, {} as Record<string, typeof transactions>);
+    }, {});
   }, [transactions]);
 
   const dailyTotals = useMemo(() => {
