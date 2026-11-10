@@ -41,6 +41,8 @@ import { cn, formatMoney } from "@/lib/utils";
 import { sumIncomeExpenseInBDT } from "@/lib/finance";
 import { useStreaks } from "@/hooks/useStreaks";
 import StreakBadge from "@/components/StreakBadge";
+import QuickLogPills from "@/components/QuickLogPills";
+import AllowanceCard from "@/components/AllowanceCard";
 
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -418,6 +420,9 @@ export default function Dashboard() {
       </div>
 
       {/* Recent transactions */}
+      <QuickLogPills />
+      <AllowanceCard budget={budgetGoal?.monthly_budget} spent={monthExpense} totalBalance={totalBalance} />
+
       <div className="vault-card p-4 sm:p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
