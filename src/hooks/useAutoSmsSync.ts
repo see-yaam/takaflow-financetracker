@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react";
-import { registerPlugin, Capacitor } from "@capacitor/core";
+import { registerPlugin, Capacitor, PermissionState } from "@capacitor/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { parseBangladeshFinancialSms, ParsedSmsResult } from "@/lib/smsParser";
 import { useWallets } from "@/hooks/useWallets";
@@ -23,6 +23,48 @@ export interface SmsReaderPluginInterface {
   ackPendingSms(options: { ids: string[] }): Promise<{ removed: number }>;
   isNotificationListenerEnabled(): Promise<{ enabled: boolean }>;
   openNotificationListenerSettings(): Promise<{ success: boolean }>;
+  openAppSettings(): Promise<void>;
+  /** Capacitor built-ins for the plugin's declared "sms" permission alias (RECEIVE_SMS + READ_SMS). */
+  checkPermissions(): Promise<{ sms: PermissionState }>;
+  requestPermissions(options?: { permissions: Array<"sms"> }): Promise<{ sms: PermissionState }>;
+}
+
+export type SmsPermission = "granted" | "denied" | "prompt" | "unsupported";
+
+export function toSmsPermission(state: string | undefined): SmsPermission {
+  if (state === "granted") return "granted";
+  if (state === "denied") return "denied";
+  if (state === "prompt" || state === "prompt-with-rationale") return "prompt";
+  return "unsupported";
+}
+
+/** RECEIVE_SMS runtime status (always "unsupported" on the web). */
+export async function getSmsPermission(): Promise<SmsPermission> {
+  if (!Capacitor.isNativePlatform()) return "unsupported";
+  try {
+    return toSmsPermission((await SmsReader.checkPermissions()).sms);
+  } catch {
+    return "unsupported";
+  }
+}
+
+/** Shows the Android permission prompt (if Android still allows asking) and returns the new state. */
+export async function requestSmsPermission(): Promise<SmsPermission> {
+  if (!Capacitor.isNativePlatform()) return "unsupported";
+  try {
+    return toSmsPermission((await SmsReader.requestPermissions({ permissions: ["sms"] })).sms);
+  } catch {
+    return "unsupported";
+  }
+}
+
+export async function openAppSettings(): Promise<void> {
+  if (!Capacitor.isNativePlatform()) return;
+  try {
+    await SmsReader.openAppSettings();
+  } catch (err) {
+    toast.error("Could not open app settings: " + (err instanceof Error ? err.message : "Unknown error"));
+  }
 }
 
 export const SmsReader = registerPlugin<SmsReaderPluginInterface>("SmsReader");
