@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
-import { transactionCreateSchema } from "@/lib/validations";
+import { parseStrict, transactionCreateSchema } from "@/lib/validations";
 import {
   handleOfflineCreateTransaction,
   handleOfflineDeleteTransaction,
@@ -103,7 +103,7 @@ export function useCreateTransaction() {
   return useMutation({
     networkMode: "offlineFirst",
     mutationFn: async (tx: { wallet_id: string; type: string; amount: number; category: string; note?: string; date?: string }) => {
-      const parsed = transactionCreateSchema.parse({
+      const parsed = parseStrict(transactionCreateSchema, {
         ...tx,
         date: tx.date || new Date().toISOString().slice(0, 10),
       });

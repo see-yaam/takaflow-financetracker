@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
-import { walletCreateSchema, walletUpdateSchema } from "@/lib/validations";
+import { parseStrict, walletCreateSchema, walletUpdateSchema } from "@/lib/validations";
 
 import { handleOfflineCreateWallet, handleOfflineDeleteWallet, isNetworkError, getOutbox, saveOutbox, processOutboxSync, generateUUID } from "@/lib/offlineSync";
 
@@ -111,7 +111,7 @@ export function useCreateWallet() {
   return useMutation({
     networkMode: "offlineFirst",
     mutationFn: async ({ name, balance, icon, currency }: { name: string; balance: number; icon?: string; currency?: string }) => {
-      const parsed = walletCreateSchema.parse({ name, balance, icon, currency: currency || "BDT" });
+      const parsed = parseStrict(walletCreateSchema, { name, balance, icon, currency: currency || "BDT" });
       
       let resolvedUserId = user?.id;
       if (!resolvedUserId) {
