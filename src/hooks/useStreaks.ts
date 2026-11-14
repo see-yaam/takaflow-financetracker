@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useTransactions } from "./useTransactions";
+import { sumIncomeExpense } from "@/lib/finance";
 import { format, subDays, differenceInCalendarDays, startOfMonth, endOfMonth, eachDayOfInterval } from "date-fns";
 
 export interface Badge {
@@ -44,8 +45,7 @@ export function useStreaks() {
     // Calculate savings rate for current month
     const currentMonth = format(now, "yyyy-MM");
     const monthTx = allTx.filter((t: any) => t.date.startsWith(currentMonth));
-    const monthIncome = monthTx.filter((t: any) => t.type === "income").reduce((s: number, t: any) => s + Number(t.amount), 0);
-    const monthExpense = monthTx.filter((t: any) => t.type === "expense").reduce((s: number, t: any) => s + Number(t.amount), 0);
+    const { income: monthIncome, expense: monthExpense } = sumIncomeExpense(monthTx);
     const savingsRate = monthIncome > 0 ? ((monthIncome - monthExpense) / monthIncome) * 100 : 0;
 
     const badges = getDefaultBadges(loggedEveryDay, streak, allTx.length, savingsRate);

@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import CurrencyDoodles from "@/components/CurrencyDoodles";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
-import { loginSchema } from "@/lib/validations";
+import { loginSchema, parseStrict } from "@/lib/validations";
 import { Lock, Mail, Eye, EyeOff } from "lucide-react";
 
 export default function Login() {
@@ -25,7 +25,7 @@ export default function Login() {
     setLoading(true);
     try {
       const cleanEmail = email.trim().toLowerCase();
-      const parsed = loginSchema.parse({ email: cleanEmail, password });
+      const parsed = parseStrict(loginSchema, { email: cleanEmail, password });
       const { error } = await supabase.auth.signInWithPassword(parsed);
       if (error) throw error;
       toast.success("Welcome back! Unlocking vault...");

@@ -87,6 +87,8 @@ export function isOfficialFinancialSender(sender: string): boolean {
   if (isPersonalPhoneNumber(sender)) return false;
 
   const normalized = normalizeSenderMask(sender);
+  // Too short to identify anyone (e.g. "", "!!!", "BA"): never official.
+  if (normalized.length < 3) return false;
   return OFFICIAL_BD_FINANCIAL_SENDERS.some((official) => {
     const normOfficial = normalizeSenderMask(official);
     return normalized === normOfficial || normalized.includes(normOfficial) || normOfficial.includes(normalized);

@@ -1,10 +1,10 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeadersFor, PRODUCTION_ORIGIN } from "../_shared/cors.ts";
+import { findUserByEmail } from "../_shared/findUserByEmail.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+const MAX_REQUESTS_PER_HOUR = 3;
+const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour
+const GENERIC_OK = { message: "If an account exists, a reset link has been sent." };
 
 function generateToken(): string {
   const array = new Uint8Array(32);
@@ -91,12 +91,14 @@ function buildEmailHtml(resetUrl: string): string {
 }
 
 Deno.serve(async (req) => {
+  const corsHeaders = corsHeadersFor(req.headers.get("Origin"), Deno.env.get("ALLOWED_ORIGIN"));
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { email } = await req.json();
+    const { email: rawEmail } = await req.json();
+    const email = typeof rawEmail === "string" ? rawEmail.trim().toLowerCase() : "";
     if (!email) {
       return new Response(JSON.stringify({ error: "Email is required" }), {
         status: 400,
@@ -114,37 +116,49 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, serviceRoleKey);
 
-    // Check if user exists in auth
-    const { data: users, error: listError } = await supabase.auth.admin.listUsers();
-    if (listError) throw listError;
+    const okResponse = () =>
+      new Response(JSON.stringify(GENERIC_OK), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
-    const userExists = users.users.some(
-      (u: { email?: string }) => u.email?.toLowerCase() === email.toLowerCase()
-    );
+    // Housekeeping: drop tokens that expired or were used more than a day ago.
+    const dayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    await supabase.from("password_reset_tokens").delete().lt("expires_at", dayAgo);
+    await supabase.from("password_reset_tokens").delete().eq("used", true).lt("created_at", dayAgo);
+
+    // Per-email rate limit (same generic answer, so it reveals nothing).
+    const hourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    const { count: recentCount, error: countError } = await supabase
+      .from("password_reset_tokens")
+      .select("id", { count: "exact", head: true })
+      .eq("email", email)
+      .gte("created_at", hourAgo);
+    if (countError) throw countError;
+    if ((recentCount ?? 0) >= MAX_REQUESTS_PER_HOUR) {
+      return okResponse();
+    }
+
+    // Look the user up across ALL pages (listUsers() alone only returns the first 50).
+    const user = await findUserByEmail(supabase.auth.admin, email);
 
     // Always return success to prevent email enumeration
-    if (!userExists) {
-      return new Response(
-        JSON.stringify({ message: "If an account exists, a reset link has been sent." }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    if (!user) {
+      return okResponse();
     }
 
     // Invalidate any existing unused tokens for this email
     await supabase
       .from("password_reset_tokens")
       .update({ used: true })
-      .eq("email", email.toLowerCase())
+      .eq("email", email)
       .eq("used", false);
 
     // Generate token and store
     const token = generateToken();
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour
+    const expiresAt = new Date(Date.now() + TOKEN_TTL_MS).toISOString();
 
     const { error: insertError } = await supabase
       .from("password_reset_tokens")
       .insert({
-        email: email.toLowerCase(),
+        email,
         token,
         expires_at: expiresAt,
         used: false,
@@ -152,8 +166,11 @@ Deno.serve(async (req) => {
 
     if (insertError) throw insertError;
 
-    // Send email via Resend
-    const resetUrl = `https://takaflow-financetracker.vercel.app/reset-password?token=${token}`;
+    // Send email via Resend. A verified-domain sender (RESEND_FROM) can reach any address;
+    // the sandbox sender only delivers to the Resend account owner.
+    const appUrl = (Deno.env.get("APP_URL") || Deno.env.get("ALLOWED_ORIGIN") || PRODUCTION_ORIGIN).replace(/\/+$/, "");
+    const fromAddress = Deno.env.get("RESEND_FROM") || "TakaFlow <onboarding@resend.dev>";
+    const resetUrl = `${appUrl}/reset-password?token=${token}`;
 
     const resendRes = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -162,7 +179,7 @@ Deno.serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        from: "TakaFlow <onboarding@resend.dev>",
+        from: fromAddress,
         to: [email],
         subject: "TakaFlow — Reset Your Password",
         html: buildEmailHtml(resetUrl),
@@ -174,10 +191,7 @@ Deno.serve(async (req) => {
       throw new Error(`Resend API error [${resendRes.status}]: ${errBody}`);
     }
 
-    return new Response(
-      JSON.stringify({ message: "If an account exists, a reset link has been sent." }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return okResponse();
   } catch (error) {
     console.error("send-reset-email error:", error);
     return new Response(

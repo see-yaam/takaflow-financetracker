@@ -15,6 +15,7 @@ import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, Trash2, Target } from "lucide-react";
 import { format } from "date-fns";
+import { sumIncomeExpense } from "@/lib/finance";
 
 const EMOJIS = ["🫙", "🏠", "✈️", "🚗", "📱", "🎓", "💍", "🎯", "💰", "🎮"];
 
@@ -29,8 +30,7 @@ export default function GoalsPage() {
   // Compute avg monthly savings for projection
   const currentMonth = format(new Date(), "yyyy-MM");
   const { data: monthTx } = useTransactions({ month: currentMonth });
-  const monthIncome = (monthTx || []).filter((t: any) => t.type === "income").reduce((s: number, t: any) => s + Number(t.amount), 0);
-  const monthExpense = (monthTx || []).filter((t: any) => t.type === "expense").reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const { income: monthIncome, expense: monthExpense } = sumIncomeExpense(monthTx);
   const avgMonthlySavings = Math.max(monthIncome - monthExpense, 0);
 
   const [showCreate, setShowCreate] = useState(false);

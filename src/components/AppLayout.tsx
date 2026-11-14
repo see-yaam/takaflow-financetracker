@@ -7,6 +7,7 @@ import SignOutConfirmDialog from "@/components/SignOutConfirmDialog";
 import VoiceTransactionModal from "@/components/voice/VoiceTransactionModal";
 import { useAutoSmsSync } from "@/hooks/useAutoSmsSync";
 import OfflineSyncBadge from "@/components/OfflineSyncBadge";
+import SyncIssuesDialog from "@/components/SyncIssuesDialog";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -228,6 +229,9 @@ export default function AppLayout() {
         onOpenChange={setSignOutOpen}
         onConfirm={signOut}
       />
+
+      {/* One app-wide instance; both sync badges open it via openSyncIssues() */}
+      <SyncIssuesDialog />
     </div>
   );
 }

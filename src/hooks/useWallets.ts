@@ -2,9 +2,9 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
-import { walletCreateSchema, walletUpdateSchema } from "@/lib/validations";
+import { parseStrict, walletCreateSchema, walletUpdateSchema } from "@/lib/validations";
 
-import { handleOfflineCreateWallet, handleOfflineDeleteWallet, isNetworkError, getOutbox, saveOutbox, processOutboxSync, generateUUID } from "@/lib/offlineSync";
+import { handleOfflineCreateWallet, handleOfflineDeleteWallet, isNetworkError, getOutbox, removeFromOutbox, findQueuedCreate, updateOutboxItem, processOutboxSync, generateUUID } from "@/lib/offlineSync";
 
 export function useWallets() {
   const { user } = useAuth();
@@ -28,37 +28,24 @@ export function useWallets() {
           throwIfSupabaseError(error);
         }
 
-        const rawOutbox = getOutbox();
-        const existingIds = new Set((data || []).map((w: any) => w.id));
-        const existingNames = new Set((data || []).map((w: any) => (w.name || "").toLowerCase().trim()));
+        const existingIds = new Set((data || []).map((w: { id: string }) => w.id));
 
-        // Auto-cleanup: If an outbox wallet already exists in cloud by ID or Name, remove it from outbox
-        let outboxModified = false;
-        const cleanedOutbox = rawOutbox.filter((item) => {
-          if (item.type === "CREATE_WALLET") {
-            const wName = (item.payload?.wallet?.name || "").toLowerCase().trim();
-            const wId = item.payload?.tempId || item.payload?.wallet?.id;
-            if ((wId && existingIds.has(wId)) || (wName && existingNames.has(wName))) {
-              outboxModified = true;
-              return false; // Already in cloud!
-            }
-          }
-          return true;
-        });
-
-        if (outboxModified) {
-          saveOutbox(cleanedOutbox);
+        // A queued wallet create whose id is already in the cloud has landed: drop just that item.
+        // (Matching by id only: a same-named wallet is a different wallet and must still sync.)
+        for (const item of getOutbox()) {
+          if (item.type !== "CREATE_WALLET") continue;
+          const wId = item.payload?.tempId || item.payload?.wallet?.id;
+          if (wId && existingIds.has(wId)) removeFromOutbox(item.id);
         }
 
-        const outboxWallets = cleanedOutbox
+        const outboxWallets = getOutbox()
           .filter((i) => i.type === "CREATE_WALLET")
           .map((i) => ({ ...i.payload.wallet, id: i.payload.tempId, _isOfflinePending: true }));
 
         const combined = [...(data || [])];
         for (const ow of outboxWallets) {
-          const normName = (ow.name || "").toLowerCase().trim();
-          if (!existingIds.has(ow.id) && !existingNames.has(normName)) {
-            combined.push(ow);
+          if (!existingIds.has(ow.id)) {
+            combined.push(ow as unknown as (typeof combined)[number]);
           }
         }
 
@@ -111,7 +98,7 @@ export function useCreateWallet() {
   return useMutation({
     networkMode: "offlineFirst",
     mutationFn: async ({ name, balance, icon, currency }: { name: string; balance: number; icon?: string; currency?: string }) => {
-      const parsed = walletCreateSchema.parse({ name, balance, icon, currency: currency || "BDT" });
+      const parsed = parseStrict(walletCreateSchema, { name, balance, icon, currency: currency || "BDT" });
       
       let resolvedUserId = user?.id;
       if (!resolvedUserId) {
@@ -187,28 +174,47 @@ export function useUpdateWallet() {
       if (parsed.name !== undefined) updates.name = parsed.name;
       if (parsed.balance !== undefined) updates.balance = parsed.balance;
 
-      // Optimistic cache update
-      qc.setQueriesData({ queryKey: ["wallets"] }, (old: any) => {
-        if (!Array.isArray(old)) return old;
-        return old.map((w) => (w.id === id ? { ...w, ...updates } : w));
-      });
+      // Wallet not synced yet: edit the queued create itself so the change can't be lost.
+      const queuedCreate = findQueuedCreate(id, "CREATE_WALLET");
+      if (queuedCreate?.payload.wallet) {
+        updateOutboxItem(queuedCreate.id, {
+          payload: { ...queuedCreate.payload, wallet: { ...queuedCreate.payload.wallet, ...updates } },
+        });
+        qc.setQueriesData({ queryKey: ["wallets"] }, (old: any) => {
+          if (!Array.isArray(old)) return old;
+          return old.map((w) => (w.id === id ? { ...w, ...updates } : w));
+        });
+        return { queued: true };
+      }
 
-      if ((typeof navigator !== "undefined" && !navigator.onLine) || id.startsWith("offline_")) {
-        return;
+      // Wallet edits are not queued offline yet (P1-03). Never pretend they were saved.
+      if (typeof navigator !== "undefined" && !navigator.onLine) {
+        throw new Error("Wallet edits need an internet connection. Please try again when you're online.");
       }
 
       try {
         const { error } = await supabase.from("wallets").update(updates).eq("id", parsed.id);
-        if (error && !isNetworkError(error)) {
+        if (error) {
+          if (isNetworkError(error)) {
+            throw new Error("Couldn't reach the server, so the wallet wasn't updated. Please try again.");
+          }
           throwIfSupabaseError(error);
         }
       } catch (err: any) {
-        if (!isNetworkError(err)) {
-          throw err;
+        if (isNetworkError(err)) {
+          throw new Error("Couldn't reach the server, so the wallet wasn't updated. Please try again.");
         }
+        throw err;
       }
+
+      qc.setQueriesData({ queryKey: ["wallets"] }, (old: any) => {
+        if (!Array.isArray(old)) return old;
+        return old.map((w) => (w.id === id ? { ...w, ...updates } : w));
+      });
+      return { queued: false };
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["wallets"] }),
+    // Success or failure, re-read the server so the UI never shows an unsaved edit.
+    onSettled: () => qc.invalidateQueries({ queryKey: ["wallets"] }),
   });
 }
 
@@ -218,7 +224,11 @@ export function useDeleteWallet() {
     networkMode: "offlineFirst",
     mutationFn: async (id: string) => {
       // 1. Direct offline mode or local pending wallet
-      if ((typeof navigator !== "undefined" && !navigator.onLine) || id.startsWith("offline_")) {
+      if (
+        (typeof navigator !== "undefined" && !navigator.onLine) ||
+        id.startsWith("offline_") ||
+        findQueuedCreate(id, "CREATE_WALLET")
+      ) {
         handleOfflineDeleteWallet(id, qc);
         return { id };
       }

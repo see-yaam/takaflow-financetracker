@@ -9,14 +9,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { LogOut, AlertTriangle, RefreshCw } from "lucide-react";
-import { getOutbox, processOutboxSync, clearOutbox } from "@/lib/offlineSync";
+import { getOutboxStats, processOutboxSync } from "@/lib/offlineSync";
+import type { SignOutOptions } from "@/contexts/AuthContext";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 interface SignOutConfirmDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onConfirm: () => void;
+  onConfirm: (opts?: SignOutOptions) => void | Promise<void>;
 }
 
 export default function SignOutConfirmDialog({
@@ -25,25 +26,33 @@ export default function SignOutConfirmDialog({
   onConfirm,
 }: SignOutConfirmDialogProps) {
   const qc = useQueryClient();
-  const [pendingCount, setPendingCount] = useState(() => getOutbox().length);
+  const queuedCount = () => {
+    const stats = getOutboxStats();
+    return stats.pending + stats.failed;
+  };
+  const [pendingCount, setPendingCount] = useState(queuedCount);
   const [syncing, setSyncing] = useState(false);
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setPendingCount(getOutbox().length);
+      setPendingCount(queuedCount());
+      setConfirmDiscard(false);
     }
   }, [open]);
 
   const handleSyncNow = async () => {
     setSyncing(true);
     try {
-      const synced = await processOutboxSync(qc);
-      const remaining = getOutbox().length;
+      const result = await processOutboxSync(qc, { force: true });
+      const remaining = result.pending + result.failed;
       setPendingCount(remaining);
-      if (synced > 0) {
-        toast.success(`Synced ${synced} offline ${synced === 1 ? "change" : "changes"}! ☁️✨`);
-      } else if (remaining > 0) {
-        toast.info("Cloud server is currently unreachable. You can keep changes or discard and sign out.");
+      if (remaining > 0 && result.synced === 0) {
+        toast.info(
+          result.failed > 0
+            ? "Some changes were rejected by the server. Review them from the sync badge, or sign out and keep them on this device."
+            : "Cloud server is currently unreachable. Your changes stay on this device if you sign out."
+        );
       }
     } catch {
       toast.error("Sync encountered an issue. You can still sign out safely.");
@@ -53,12 +62,17 @@ export default function SignOutConfirmDialog({
   };
 
   const handleDiscardAndSignOut = async () => {
-    clearOutbox();
-    toast.info("Offline queue cleared");
+    if (!confirmDiscard) {
+      setConfirmDiscard(true); // require a second, explicit tap
+      return;
+    }
     onOpenChange(false);
     try {
-      await onConfirm();
-    } catch {}
+      await onConfirm({ discardOfflineChanges: true });
+      toast.info("Offline changes discarded");
+    } catch (err) {
+      console.warn("Sign out failed:", err);
+    }
     if (typeof window !== "undefined") {
       window.location.href = "/login";
     }
@@ -67,8 +81,11 @@ export default function SignOutConfirmDialog({
   const handleConfirmSignOut = async () => {
     onOpenChange(false);
     try {
+      // Keeps this user's unsynced changes on the device; they sync at next sign-in.
       await onConfirm();
-    } catch {}
+    } catch (err) {
+      console.warn("Sign out failed:", err);
+    }
     if (typeof window !== "undefined") {
       window.location.href = "/login";
     }
@@ -96,6 +113,8 @@ export default function SignOutConfirmDialog({
               <div className="leading-relaxed">
                 <strong className="font-semibold block mb-0.5">Unsynced Offline Changes!</strong>
                 You have {pendingCount} offline {pendingCount === 1 ? "change" : "changes"} that haven't synced to cloud yet.
+                If you sign out, {pendingCount === 1 ? "it stays" : "they stay"} safely on this device and will sync the next
+                time you sign in here.
               </div>
             </div>
             <button
@@ -110,9 +129,13 @@ export default function SignOutConfirmDialog({
             <button
               type="button"
               onClick={handleDiscardAndSignOut}
-              className="text-[11px] text-muted-foreground hover:text-destructive underline text-center pt-0.5 transition-colors"
+              className={`text-[11px] underline text-center pt-0.5 transition-colors ${
+                confirmDiscard ? "text-destructive font-semibold" : "text-muted-foreground hover:text-destructive"
+              }`}
             >
-              Discard offline changes & Sign Out anyway
+              {confirmDiscard
+                ? `Tap again to permanently delete ${pendingCount} unsynced ${pendingCount === 1 ? "change" : "changes"} & sign out`
+                : "Discard offline changes & Sign Out anyway"}
             </button>
           </div>
         )}

@@ -140,7 +140,7 @@ export default function InsufficientBalanceModal({
       });
 
       if (attemptedExpense.recurring) {
-        const dayOfMonth = new Date(attemptedExpense.date).getDate();
+        const dayOfMonth = Number(attemptedExpense.date.slice(8, 10));
         await createRecurring.mutateAsync({
           wallet_id: targetWallet.id,
           type: "expense",
@@ -148,6 +148,7 @@ export default function InsufficientBalanceModal({
           category: attemptedExpense.category,
           note: attemptedExpense.note,
           day_of_month: dayOfMonth,
+          last_applied_month: attemptedExpense.date.slice(0, 7),
         });
       }
 
@@ -209,7 +210,7 @@ export default function InsufficientBalanceModal({
       });
 
       if (attemptedExpense.recurring) {
-        const dayOfMonth = new Date(attemptedExpense.date).getDate();
+        const dayOfMonth = Number(attemptedExpense.date.slice(8, 10));
         await createRecurring.mutateAsync({
           wallet_id: targetWallet.id,
           type: "expense",
@@ -217,6 +218,7 @@ export default function InsufficientBalanceModal({
           category: attemptedExpense.category,
           note: attemptedExpense.note,
           day_of_month: dayOfMonth,
+          last_applied_month: attemptedExpense.date.slice(0, 7),
         });
       }
 

@@ -151,7 +151,7 @@ All pages are `React.lazy(...)` wrapped in `<ErrorBoundary>` and `<Suspense>`.
 | :--- | :--- | :--- | :--- |
 | `/` | Smart `RootRoute` | `LandingPage` or `/dashboard` | Guests see marketing landing page; signed-in users redirect to `/dashboard` |
 | `/about`, `/landing` | Public | [`LandingPage.tsx`](src/pages/LandingPage.tsx) | Product showcase & APK/Web entry |
-| `/login` | Public | [`Login.tsx`](src/pages/Login.tsx) | Email/password login + "Quick Demo Login" button *(check before public prod)* |
+| `/login` | Public | [`Login.tsx`](src/pages/Login.tsx) | Email/password login (no demo/bypass login exists) |
 | `/signup` | Public | [`Signup.tsx`](src/pages/Signup.tsx) | 3-step signup: credentials → 6-digit email OTP verification → `/onboarding` |
 | `/forgot-password` | Public | [`ForgotPassword.tsx`](src/pages/ForgotPassword.tsx) | Invokes `send-reset-email` Edge Function (custom Resend flow) |
 | `/reset-password` | Public | [`ResetPassword.tsx`](src/pages/ResetPassword.tsx) | Consumes `?token=...` via `verify-reset-token` Edge Function |
@@ -309,10 +309,10 @@ All user-owned tables enable Row Level Security (`ENABLE ROW LEVEL SECURITY`) wi
 ### Verification Commands & Current Baseline (Measured 2026-11-10)
 | Check | Command | Current Result | Details |
 | :--- | :--- | :--- | :--- |
-| Unit Tests | `npm test` (`vitest run`) | **PASS (101/101)** | 8 suites: `voiceParser` (30), `validations` (21), `smsParser` (20), `financialCalculations` (11), `supabaseErrors` (9), `offlineSync` (6), `appUpdater` (3), `example` (1) |
-| Type Check | `npx tsc --noEmit` | **PASS (0 errors)** | Note: `strict: false` & `noImplicitAny: false` |
+| Unit Tests | `npm test` (`vitest run`) | **PASS (181/181)** | 15 suites; Supabase is mocked in tests (`src/test/mocks/supabase.ts`), no test touches the real backend |
+| Type Check | `npm run typecheck` | **PASS (0 errors)** | Runs `tsc -p tsconfig.app.json` + `tsconfig.node.json`. Plain `npx tsc --noEmit` checks nothing (root `files: []`). `strict: false` until P1-04 |
 | Production Build | `npm run build` | **PASS (19.28s)** | `3,343` modules; chunks >500 kB: `heic2any` (`1,352.55 kB` lazy), `index` (`786.27 kB`) |
-| Linter | `npm run lint` (`eslint .`) | **FAIL (188 issues)** | `178` errors + `10` warnings (`no-explicit-any`, `no-empty`, etc.) |
+| Linter | `npm run lint` (`eslint .`) | **FAIL (139 issues)** | `127` errors + `12` warnings, down from 188 (P1-04 target: 0). New P0 code adds no errors |
 | E2E Tests | `playwright.config.ts` | **Not configured** | No Playwright test directory exists yet |
 
 ### CI/CD Pipelines

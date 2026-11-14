@@ -5,7 +5,6 @@ import {
   transactionCreateSchema,
   recurringCreateSchema,
   budgetGoalSchema,
-  savingsGoalSchema,
   debtCreateSchema,
   debtPaymentSchema,
   transferSchema,

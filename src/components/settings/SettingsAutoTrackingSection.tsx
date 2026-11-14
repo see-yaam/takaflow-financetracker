@@ -3,15 +3,19 @@ import { Bell, CheckCircle2, AlertCircle, ExternalLink, Zap } from "lucide-react
 import { Button } from "@/components/ui/button";
 import { Capacitor } from "@capacitor/core";
 import { checkNotificationPermission, openNotificationSettings } from "@/hooks/useAutoSmsSync";
+import { clearUnparsedSms, getUnparsedSms, UnparsedSms } from "@/lib/smsIngest";
 
 export default function SettingsAutoTrackingSection() {
   const [isEnabled, setIsEnabled] = useState<boolean | null>(null);
+  const [unparsed, setUnparsed] = useState<UnparsedSms[]>(() => getUnparsedSms());
+  const [showUnparsed, setShowUnparsed] = useState(false);
   const isNative = Capacitor.isNativePlatform();
 
   const verifyStatus = async () => {
     if (!isNative) return;
     const active = await checkNotificationPermission();
     setIsEnabled(active);
+    setUnparsed(getUnparsedSms());
   };
 
   useEffect(() => {
@@ -75,6 +79,46 @@ export default function SettingsAutoTrackingSection() {
         <p>• <strong>Incoming money (Income):</strong> Automatically captured from SMS & receipts.</p>
         <p>• <strong>Send Money & Payments (Expense):</strong> Automatically captured from bKash & Nagad app notifications.</p>
       </div>
+
+      {unparsed.length > 0 && (
+        <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-amber-600 dark:text-amber-400 font-medium">
+              {unparsed.length} captured {unparsed.length === 1 ? "message" : "messages"} could not be read as a transaction
+            </span>
+            <button type="button" className="underline text-muted-foreground" onClick={() => setShowUnparsed((v) => !v)}>
+              {showUnparsed ? "Hide" : "Review"}
+            </button>
+          </div>
+          {showUnparsed && (
+            <>
+              <ul className="space-y-1.5 max-h-48 overflow-y-auto">
+                {unparsed
+                  .slice()
+                  .reverse()
+                  .map((m) => (
+                    <li key={m.id} className="rounded bg-background/60 p-2">
+                      <span className="font-medium text-foreground">{m.sender || "Unknown sender"}</span>
+                      <span className="text-muted-foreground"> · {new Date(m.timestamp).toLocaleString()}</span>
+                      <p className="text-muted-foreground break-words">{m.body}</p>
+                    </li>
+                  ))}
+              </ul>
+              <p className="text-muted-foreground">Add any real transaction here manually, then clear the list.</p>
+              <Button
+                variant="outline"
+                className="h-8 text-xs"
+                onClick={() => {
+                  clearUnparsedSms();
+                  setUnparsed([]);
+                }}
+              >
+                Clear list
+              </Button>
+            </>
+          )}
+        </div>
+      )}
 
       {!isEnabled && (
         <Button

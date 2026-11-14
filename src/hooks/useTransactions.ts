@@ -2,14 +2,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
-import { transactionCreateSchema } from "@/lib/validations";
+import { parseStrict, transactionCreateSchema } from "@/lib/validations";
 import {
   handleOfflineCreateTransaction,
   handleOfflineDeleteTransaction,
   handleOfflineReverseTransaction,
   isNetworkError,
   getOutbox,
-  saveOutbox,
+  removeFromOutbox,
+  findQueuedCreate,
   processOutboxSync,
   generateUUID,
 } from "@/lib/offlineSync";
@@ -48,34 +49,24 @@ export function useTransactions(filters?: { month?: string; walletId?: string; c
           throwIfSupabaseError(error);
         }
 
-        const rawOutbox = getOutbox();
-        const existingIds = new Set((data || []).map((t: any) => t.id));
+        const existingIds = new Set((data || []).map((t: { id: string }) => t.id));
 
-        // Auto-cleanup: If an outbox transaction already exists in cloud, remove it from outbox
-        let outboxModified = false;
-        const cleanedOutbox = rawOutbox.filter((item) => {
-          if (item.type === "CREATE_TRANSACTION") {
-            const txId = item.payload?.tempId || item.payload?.transaction?.id;
-            if (txId && existingIds.has(txId)) {
-              outboxModified = true;
-              return false; // Already in cloud!
-            }
-          }
-          return true;
-        });
-
-        if (outboxModified) {
-          saveOutbox(cleanedOutbox);
+        // A queued create whose id is already in the cloud has landed: drop just that item (by id).
+        for (const item of getOutbox()) {
+          if (item.type !== "CREATE_TRANSACTION") continue;
+          const txId = item.payload?.tempId || item.payload?.transaction?.id;
+          if (txId && existingIds.has(txId)) removeFromOutbox(item.id);
         }
 
-        const outboxTxs = cleanedOutbox
+        const outboxTxs = getOutbox()
           .filter((i) => i.type === "CREATE_TRANSACTION")
           .map((i) => ({ ...i.payload.transaction, id: i.payload.tempId, _isOfflinePending: true }));
 
         const combined = [...(data || [])];
         for (const ot of outboxTxs) {
           if (!existingIds.has(ot.id)) {
-            combined.unshift(ot);
+            // queued (not yet synced) rows share the row shape except the joined wallets(name)
+            combined.unshift(ot as unknown as (typeof combined)[number]);
           }
         }
         return combined;
@@ -103,7 +94,7 @@ export function useCreateTransaction() {
   return useMutation({
     networkMode: "offlineFirst",
     mutationFn: async (tx: { wallet_id: string; type: string; amount: number; category: string; note?: string; date?: string }) => {
-      const parsed = transactionCreateSchema.parse({
+      const parsed = parseStrict(transactionCreateSchema, {
         ...tx,
         date: tx.date || new Date().toISOString().slice(0, 10),
       });
@@ -168,7 +159,8 @@ export function useDeleteTransaction() {
   return useMutation({
     networkMode: "offlineFirst",
     mutationFn: async (id: string) => {
-      if (typeof navigator !== "undefined" && !navigator.onLine) {
+      // Still queued locally (or offline): handle via the outbox so it can't resurrect on sync.
+      if ((typeof navigator !== "undefined" && !navigator.onLine) || findQueuedCreate(id, "CREATE_TRANSACTION")) {
         handleOfflineDeleteTransaction(id, qc);
         return;
       }
@@ -201,7 +193,8 @@ export function useReverseTransaction() {
   return useMutation({
     networkMode: "offlineFirst",
     mutationFn: async (id: string) => {
-      if (typeof navigator !== "undefined" && !navigator.onLine) {
+      // Still queued locally (or offline): handle via the outbox so the reversal isn't lost.
+      if ((typeof navigator !== "undefined" && !navigator.onLine) || findQueuedCreate(id, "CREATE_TRANSACTION")) {
         handleOfflineReverseTransaction(id, qc);
         return;
       }

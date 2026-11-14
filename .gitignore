@@ -30,3 +30,14 @@ dist-ssr
 
 # Build outputs
 *.apk
+
+# Vite temp config bundles
+vite.config.ts.timestamp-*.mjs
+
+# Signing keys (never commit)
+*.keystore
+*.jks
+
+# Supabase CLI local state
+supabase/.temp/
+supabase/.branches/

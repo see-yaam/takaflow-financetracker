@@ -1,19 +1,26 @@
 import { useEffect, useRef } from "react";
 import { registerPlugin, Capacitor } from "@capacitor/core";
-import { parseBangladeshFinancialSms } from "@/lib/smsParser";
+import { useQueryClient } from "@tanstack/react-query";
+import { parseBangladeshFinancialSms, ParsedSmsResult } from "@/lib/smsParser";
 import { useWallets } from "@/hooks/useWallets";
-import { useCreateTransaction } from "@/hooks/useTransactions";
+import { useAuth } from "@/contexts/AuthContext";
+import { handleOfflineCreateTransaction, processOutboxSync } from "@/lib/offlineSync";
+import { parseStrict, transactionCreateSchema } from "@/lib/validations";
+import {
+  NativeSmsMessage,
+  loadIngestState,
+  processPendingSms,
+  recordUnparsedSms,
+  saveIngestState,
+} from "@/lib/smsIngest";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
-interface SmsMessageItem {
-  sender: string;
-  body: string;
-  timestamp: number;
-}
-
 export interface SmsReaderPluginInterface {
-  getPendingSms(): Promise<{ messages: SmsMessageItem[] }>;
+  /** Unacknowledged captured messages (native never clears on read). */
+  getPendingSms(): Promise<{ messages: NativeSmsMessage[]; overflowCount?: number }>;
+  /** Removes exactly these ids from the native queue, after JS durably recorded them. */
+  ackPendingSms(options: { ids: string[] }): Promise<{ removed: number }>;
   isNotificationListenerEnabled(): Promise<{ enabled: boolean }>;
   openNotificationListenerSettings(): Promise<{ success: boolean }>;
 }
@@ -37,69 +44,90 @@ export async function openNotificationSettings(): Promise<void> {
   }
   try {
     await SmsReader.openNotificationListenerSettings();
-  } catch (err: any) {
-    toast.error("Could not open settings: " + (err?.message || "Unknown error"));
+  } catch (err) {
+    toast.error("Could not open settings: " + (err instanceof Error ? err.message : "Unknown error"));
   }
 }
 
+type WalletLike = { id: string; name: string };
+
+/** Wallet whose name matches the provider (bKash, Nagad, ...), else the first wallet. */
+export function matchWalletForSms(parsed: ParsedSmsResult, wallets: WalletLike[]): WalletLike | null {
+  if (!wallets.length) return null;
+  const source = parsed.source.toLowerCase();
+  return (
+    wallets.find((w) => w.name.toLowerCase().includes(source)) ||
+    wallets.find((w) => source.includes(w.name.toLowerCase())) ||
+    wallets[0]
+  );
+}
+
 export function useAutoSmsSync() {
+  const qc = useQueryClient();
+  const { user } = useAuth();
   const { data: wallets } = useWallets();
-  const createTx = useCreateTransaction();
-  const isSyncing = useRef(false);
+
+  // Latest values for the long-lived polling effect (no restart on every refetch).
+  const userIdRef = useRef<string | undefined>(user?.id);
+  const walletsRef = useRef<WalletLike[] | undefined>(wallets as WalletLike[] | undefined);
+  const checkRef = useRef<(() => void) | null>(null);
+  userIdRef.current = user?.id;
+  walletsRef.current = wallets as WalletLike[] | undefined;
 
   useEffect(() => {
     // Only active when running natively on mobile
     if (!Capacitor.isNativePlatform()) return;
 
+    let busy = false;
+
     const checkPendingSms = async () => {
-      if (isSyncing.current) return;
-      isSyncing.current = true;
+      const userId = userIdRef.current;
+      const currentWallets = walletsRef.current;
+      // Not ready yet: leave everything in the native queue (nothing is read, nothing is lost).
+      if (busy || !userId || !currentWallets || currentWallets.length === 0) return;
+      busy = true;
 
       try {
         const { messages } = await SmsReader.getPendingSms();
-        if (messages && messages.length > 0) {
-          if (!wallets || wallets.length === 0) {
-            return;
-          }
-          const availableWallets = wallets;
+        if (!messages || messages.length === 0) return;
 
-          for (const msg of messages) {
-            const parsed = parseBangladeshFinancialSms(msg.body, msg.sender);
-            if (!parsed) continue;
+        const result = processPendingSms(messages, {
+          parse: (body, sender) => parseBangladeshFinancialSms(body, sender),
+          matchWallet: (parsed) => matchWalletForSms(parsed, currentWallets),
+          enqueue: (tx) => {
+            const valid = parseStrict(transactionCreateSchema, tx);
+            handleOfflineCreateTransaction(valid, userId, qc, { skipSync: true });
+          },
+          loadState: loadIngestState,
+          saveState: saveIngestState,
+          recordUnparsed: recordUnparsedSms,
+          formatDate: (ts) => format(new Date(ts), "yyyy-MM-dd"),
+          now: () => Date.now(),
+        });
 
-            // Match wallet: look for wallet whose name contains the provider
-            const matchedWallet =
-              availableWallets.find((w) =>
-                w.name.toLowerCase().includes(parsed.source.toLowerCase())
-              ) ||
-              availableWallets.find((w) =>
-                parsed.source.toLowerCase().includes(w.name.toLowerCase())
-              ) ||
-              availableWallets[0]; // fallback to primary wallet
+        if (result.created.length > 0) {
+          processOutboxSync(qc).catch((err) => console.error("Sync after SMS capture failed:", err));
+          const first = result.created[0];
+          toast.success(
+            result.created.length === 1
+              ? `⚡ Auto-Recorded ${first.source}: ৳${first.amount.toLocaleString()} ${first.type === "expense" ? "spent" : "received"}!`
+              : `⚡ Auto-Recorded ${result.created.length} transactions from SMS/notifications`,
+            { duration: 5000 }
+          );
+        }
 
-            const txDate = format(new Date(msg.timestamp || Date.now()), "yyyy-MM-dd");
-
-            await createTx.mutateAsync({
-              wallet_id: matchedWallet.id,
-              type: parsed.type,
-              amount: parsed.amount,
-              category: parsed.categorySuggestion || "Other",
-              note: `Auto: ${parsed.source} ${parsed.merchantOrParty ? `(${parsed.merchantOrParty})` : ""} ${parsed.trxId ? `Trx: ${parsed.trxId}` : ""}`.trim(),
-              date: txDate,
-            });
-
-            toast.success(
-              `⚡ Auto-Recorded ${parsed.source}: ৳${parsed.amount.toLocaleString()} ${parsed.type === "expense" ? "spent" : "received"}!`,
-              { duration: 5000 }
-            );
-          }
+        if (result.toAck.length > 0) {
+          await SmsReader.ackPendingSms({ ids: result.toAck });
         }
       } catch (err) {
+        // Nothing was acknowledged for unrecorded messages, so they will be retried.
         console.error("Error reading pending SMS:", err);
       } finally {
-        isSyncing.current = false;
+        busy = false;
       }
     };
+
+    checkRef.current = checkPendingSms;
 
     // Check immediately on launch
     checkPendingSms();
@@ -115,12 +143,20 @@ export function useAutoSmsSync() {
     document.addEventListener("visibilitychange", onVisibilityChange);
     window.addEventListener("focus", onFocus);
 
-    // Recheck periodically while active
+    // Recheck periodically while active (also delivers the delayed acks)
     const interval = setInterval(checkPendingSms, 10000);
     return () => {
       clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisibilityChange);
       window.removeEventListener("focus", onFocus);
+      checkRef.current = null;
     };
-  }, [wallets, createTx]);
+  }, [qc]);
+
+  // Wallets arriving after launch: check right away instead of waiting for the interval.
+  const walletCount = wallets?.length ?? 0;
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform() || walletCount === 0) return;
+    checkRef.current?.();
+  }, [walletCount]);
 }

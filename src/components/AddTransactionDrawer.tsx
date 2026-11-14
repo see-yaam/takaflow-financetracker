@@ -55,11 +55,14 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
     }
   }, [wallets, walletId]);
 
+  // Reset the form only when the drawer opens (or its defaults change). It must NOT
+  // depend on `wallets`: background refetches and quick-adding a wallet would
+  // otherwise wipe what the user is typing. The effect above picks the wallet.
   useEffect(() => {
     if (open) {
       setType(defaultType);
       setAmount("");
-      setWalletId(wallets?.[0]?.id || "");
+      setWalletId("");
       setCategory("");
       setNote("");
       setDate(defaultDate || format(new Date(), "yyyy-MM-dd"));
@@ -67,7 +70,7 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
       setQuickAddWalletOpen(false);
       setQuickWalletName("");
     }
-  }, [open, defaultType, defaultDate, wallets]);
+  }, [open, defaultType, defaultDate]);
 
   const handleQuickAddWallet = async () => {
     const name = quickWalletName.trim();
@@ -131,7 +134,8 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
       });
 
       if (recurring) {
-        const dayOfMonth = new Date(date).getDate();
+        // Parse the day from "yyyy-MM-dd" directly: new Date(date) is UTC and shifts days west of GMT.
+        const dayOfMonth = Number(date.slice(8, 10));
         await createRecurring.mutateAsync({
           wallet_id: walletId,
           type,
@@ -139,6 +143,8 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
           category: category.trim(),
           note: note || undefined,
           day_of_month: dayOfMonth,
+          // This transaction already covers its own month; the rule starts from the next one.
+          last_applied_month: date.slice(0, 7),
         });
         toast.success("Transaction committed & recurring set");
       } else {

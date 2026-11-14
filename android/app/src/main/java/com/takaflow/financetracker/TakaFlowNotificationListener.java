@@ -1,65 +1,52 @@
 package com.takaflow.financetracker;
 
 import android.app.Notification;
-import android.content.Context;
-import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.service.notification.NotificationListenerService;
 import android.service.notification.StatusBarNotification;
 import android.util.Log;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
-import java.util.regex.Pattern;
-import org.json.JSONArray;
-import org.json.JSONObject;
 
 /**
- * Background Notification Listener for Bangladeshi Financial Apps & Banks.
- * Intercepts push notifications from:
- * - bKash (com.bKash.customerapp)
- * - Nagad (com.konasl.nagad)
- * - Upay (bd.com.upay.customer)
- * - Cellfin / IBBL (com.ibbl.cellfin)
- * - SMS Notifications (Google Messages, Samsung Messages, default MMS)
- * - Bank apps (Citytouch, Astha, NexusPay)
+ * Background Notification Listener for Bangladeshi financial apps and SMS apps.
+ *
+ * Anti-scam rules (P0-04):
+ *  - Only allowlisted packages are read: official MFS/bank apps and the
+ *    system SMS apps. Messengers (WhatsApp, Telegram, Messenger, ...) are ignored.
+ *  - MFS/bank app notifications: the sender is the app itself (trusted by package).
+ *  - SMS app notifications: the sender is the SMS sender shown in the title and
+ *    must pass the same shields as SmsReceiver (no personal numbers, official
+ *    mask/short code only). The sender is never guessed from message content
+ *    and never defaults to "bKash".
  */
 public class TakaFlowNotificationListener extends NotificationListenerService {
     private static final String TAG = "TakaFlowNotification";
-    private static final String PREF_NAME = "takaflow_pending_sms";
-    private static final String KEY_PENDING_TX = "pending_transactions";
-    private static final String KEY_SEEN_HASHES = "seen_notification_hashes";
 
-    // Known Bangladeshi MFS & Banking Application Packages (direct source)
-    private static final Set<String> MFS_PACKAGES = new HashSet<>();
-    private static final Set<String> TARGET_PACKAGES = new HashSet<>();
+    // Official MFS & banking app packages -> sender name recorded for them
+    private static final Map<String, String> MFS_APP_SENDERS = new HashMap<>();
+    private static final Set<String> SMS_APP_PACKAGES = new HashSet<>();
     static {
-        MFS_PACKAGES.add("com.bKash.customerapp");
-        MFS_PACKAGES.add("com.konasl.nagad");
-        MFS_PACKAGES.add("bd.com.upay.customer");
-        MFS_PACKAGES.add("com.ibbl.cellfin");
-        MFS_PACKAGES.add("com.thecitybank.citytouch");
-        MFS_PACKAGES.add("com.bracbank.astha");
-        MFS_PACKAGES.add("com.dbbl.nexus.pay");
-        MFS_PACKAGES.add("com.dutchbanglabank.rocket");
+        MFS_APP_SENDERS.put("com.bKash.customerapp", "bKash");
+        MFS_APP_SENDERS.put("com.konasl.nagad", "Nagad");
+        MFS_APP_SENDERS.put("bd.com.upay.customer", "Upay");
+        MFS_APP_SENDERS.put("com.ibbl.cellfin", "Cellfin");
+        MFS_APP_SENDERS.put("com.thecitybank.citytouch", "City Bank");
+        MFS_APP_SENDERS.put("com.bracbank.astha", "BRAC Bank");
+        MFS_APP_SENDERS.put("com.dbbl.nexus.pay", "DBBL");
+        MFS_APP_SENDERS.put("com.dutchbanglabank.rocket", "Rocket");
 
-        TARGET_PACKAGES.addAll(MFS_PACKAGES);
-
-        // Major SMS app packages on Android
-        TARGET_PACKAGES.add("com.google.android.apps.messaging");
-        TARGET_PACKAGES.add("com.samsung.android.messaging");
-        TARGET_PACKAGES.add("com.android.mms");
-        TARGET_PACKAGES.add("com.miui.mms");
-        TARGET_PACKAGES.add("com.oppo.mms");
-        TARGET_PACKAGES.add("com.coloros.mms");
-        TARGET_PACKAGES.add("com.vivo.mms");
-        TARGET_PACKAGES.add("com.transsion.mms");
+        SMS_APP_PACKAGES.add("com.google.android.apps.messaging");
+        SMS_APP_PACKAGES.add("com.samsung.android.messaging");
+        SMS_APP_PACKAGES.add("com.android.mms");
+        SMS_APP_PACKAGES.add("com.miui.mms");
+        SMS_APP_PACKAGES.add("com.oppo.mms");
+        SMS_APP_PACKAGES.add("com.coloros.mms");
+        SMS_APP_PACKAGES.add("com.vivo.mms");
+        SMS_APP_PACKAGES.add("com.transsion.mms");
     }
-
-    // Pattern to check if text contains financial transaction indicators (English & Bangla)
-    private static final Pattern FINANCIAL_INDICATOR_PATTERN = Pattern.compile(
-        "(?:Tk\\.?|BDT|৳|debited|credited|paid|payment|received|cash out|cash in|send money|transfer|transferred|recharge|balance|spent|successful|trxid|টাকা|পেমেন্ট|পাঠানো|পেয়েছেন|ক্যাশ|উত্তোলন|জমা|ব্যালেন্স|রিচার্জ|খরচ|সফল|সফলভাবে|গৃহীত)",
-        Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE
-    );
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
@@ -67,6 +54,12 @@ public class TakaFlowNotificationListener extends NotificationListenerService {
 
         String packageName = sbn.getPackageName();
         if (packageName == null) return;
+
+        boolean isMfsApp = MFS_APP_SENDERS.containsKey(packageName);
+        boolean isSmsApp = SMS_APP_PACKAGES.contains(packageName);
+        if (!isMfsApp && !isSmsApp) {
+            return; // never read other apps' notifications
+        }
 
         Notification notification = sbn.getNotification();
         if (notification == null || notification.extras == null) return;
@@ -101,97 +94,29 @@ public class TakaFlowNotificationListener extends NotificationListenerService {
 
         String title = titleChars != null ? titleChars.toString().trim() : (titleBigChars != null ? titleBigChars.toString().trim() : "");
         String text = fullTextBuilder.toString().trim();
+        if (text.isEmpty()) return;
 
-        if (text.isEmpty() && title.isEmpty()) return;
+        String sender;
+        if (isMfsApp) {
+            sender = MFS_APP_SENDERS.get(packageName);
+            if (!SenderShield.hasFinancialKeyword(title + " " + text)) return;
+        } else {
+            // SMS app: the notification title is the SMS sender (mask, short code, number or contact name).
+            sender = title;
+            if (!SenderShield.acceptSms(sender, text)) {
+                Log.w(TAG, "[ANTI-SCAM SHIELD] Ignored SMS notification from an unverified sender");
+                return;
+            }
+        }
 
-        String combined = (title + " " + text).trim();
-
-        // 1. Is this from a targeted package OR does it mention a Bangladeshi bank/MFS?
-        boolean isMfsApp = MFS_PACKAGES.contains(packageName);
-        boolean isTargetApp = TARGET_PACKAGES.contains(packageName);
-        boolean mentionsFinance = FINANCIAL_INDICATOR_PATTERN.matcher(combined).find();
-
-        if (!isTargetApp && !mentionsFinance) {
+        // The same notification is often reposted/updated: record it once.
+        if (PendingSmsStore.markNotificationSeen(this, sender + "|" + text)) {
             return;
         }
 
-        // For non-MFS apps (like generic SMS app), it MUST contain financial transaction keywords or amount symbols
-        if (!isMfsApp && !mentionsFinance) {
-            return;
-        }
-
-        // Determine friendly sender name
-        String sender = resolveSender(packageName, title, combined);
-
-        // Deduplication: create a content hash to avoid recording the same notification twice
-        String dedupeKey = sender + "|" + text;
-        if (isAlreadySeen(dedupeKey)) {
-            return;
-        }
-
-        Log.i(TAG, "Captured Financial Notification from [" + sender + "]: " + text);
-        storeNotificationTransaction(sender, text.isEmpty() ? title : text, sbn.getPostTime());
-    }
-
-    private String resolveSender(String packageName, String title, String combinedText) {
-        if ("com.bKash.customerapp".equals(packageName)) return "bKash";
-        if ("com.konasl.nagad".equals(packageName)) return "Nagad";
-        if ("bd.com.upay.customer".equals(packageName)) return "Upay";
-        if ("com.ibbl.cellfin".equals(packageName)) return "Cellfin";
-        if ("com.thecitybank.citytouch".equals(packageName)) return "City Bank";
-        if ("com.bracbank.astha".equals(packageName)) return "BRAC Bank";
-        if ("com.dbbl.nexus.pay".equals(packageName)) return "DBBL";
-        if ("com.dutchbanglabank.rocket".equals(packageName)) return "Rocket";
-
-        String upper = combinedText.toUpperCase();
-        if (upper.contains("BKASH")) return "bKash";
-        if (upper.contains("NAGAD")) return "Nagad";
-        if (upper.contains("ROCKET") || upper.contains("16216")) return "Rocket";
-        if (upper.contains("CELLFIN") || upper.contains("IBBL")) return "Cellfin";
-        if (upper.contains("BRAC")) return "BRAC Bank";
-        if (upper.contains("CITY")) return "City Bank";
-        if (upper.contains("EBL")) return "Eastern Bank";
-        if (upper.contains("DBBL") || upper.contains("NEXUS")) return "DBBL";
-
-        if (title != null && !title.trim().isEmpty() && !title.equalsIgnoreCase("Messages") && !title.equalsIgnoreCase("Notification")) {
-            return title.trim();
-        }
-        return "bKash";
-    }
-
-    private boolean isAlreadySeen(String key) {
-        SharedPreferences prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-        Set<String> seen = prefs.getStringSet(KEY_SEEN_HASHES, new HashSet<String>());
-        if (seen.contains(key)) {
-            return true;
-        }
-        // Save to seen set (limit size to 100 entries)
-        Set<String> newSeen = new HashSet<>(seen);
-        if (newSeen.size() > 100) {
-            newSeen.clear();
-        }
-        newSeen.add(key);
-        prefs.edit().putStringSet(KEY_SEEN_HASHES, newSeen).apply();
-        return false;
-    }
-
-    private void storeNotificationTransaction(String sender, String text, long timestamp) {
-        try {
-            SharedPreferences prefs = getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE);
-            String existingJson = prefs.getString(KEY_PENDING_TX, "[]");
-            JSONArray array = new JSONArray(existingJson);
-
-            JSONObject tx = new JSONObject();
-            tx.put("sender", sender);
-            tx.put("body", text);
-            tx.put("timestamp", timestamp > 0 ? timestamp : System.currentTimeMillis());
-
-            array.put(tx);
-
-            prefs.edit().putString(KEY_PENDING_TX, array.toString()).apply();
-            Log.i(TAG, "Successfully stored financial notification for TakaFlow.");
-        } catch (Exception e) {
-            Log.e(TAG, "Error storing notification transaction", e);
+        long postTime = sbn.getPostTime();
+        if (PendingSmsStore.enqueue(this, sender, text, postTime > 0 ? postTime : System.currentTimeMillis(), "notification")) {
+            Log.i(TAG, "Captured financial notification from " + sender);
         }
     }
 }
