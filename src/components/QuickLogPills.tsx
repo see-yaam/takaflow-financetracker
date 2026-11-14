@@ -50,7 +50,7 @@ export default function QuickLogPills() {
   };
 
   return (
-    <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1" aria-label="Quick log">
+    <div className="flex w-full min-w-0 max-w-full items-center gap-2 overflow-x-auto overscroll-x-contain no-scrollbar py-1" aria-label="Quick log">
       {presets.map((p) => (
         <button
           key={p.id}
