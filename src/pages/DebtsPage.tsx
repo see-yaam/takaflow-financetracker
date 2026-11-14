@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useDebts, useAllDebtPayments, useCreateDebt, useAddDebtPayment, useAllDebtAdditions, useAddDebtAddition } from "@/hooks/useDebts";
 import { useWallets } from "@/hooks/useWallets";
 import { useAuth } from "@/contexts/AuthContext";
@@ -34,13 +35,13 @@ export default function DebtsPage() {
   const [debtNote, setDebtNote] = useState("");
   const [affectsWallet, setAffectsWallet] = useState(true);
 
-  const [payDialog, setPayDialog] = useState<any>(null);
+  const [payDialog, setPayDialog] = useState<Tables<"debts"> | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payDate, setPayDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [payNote, setPayNote] = useState("");
   const [payWalletId, setPayWalletId] = useState("");
 
-  const [addMoreDialog, setAddMoreDialog] = useState<any>(null);
+  const [addMoreDialog, setAddMoreDialog] = useState<Tables<"debts"> | null>(null);
   const [addMoreAmount, setAddMoreAmount] = useState("");
   const [addMoreDate, setAddMoreDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [addMoreNote, setAddMoreNote] = useState("");
@@ -110,7 +111,7 @@ export default function DebtsPage() {
         amount: amt,
         date: payDate,
         note: payNote || undefined,
-        debtType: payDialog.type,
+        debtType: payDialog.type as "borrowed" | "lent",
         walletId: payWalletId,
         personName: payDialog.person_name,
         currentRemaining: payDialog.remaining_amount,
@@ -153,7 +154,7 @@ export default function DebtsPage() {
         date: addMoreDate,
         note: addMoreNote || undefined,
         walletId: addMoreWalletId,
-        debtType: addMoreDialog.type,
+        debtType: addMoreDialog.type as "borrowed" | "lent",
         personName: addMoreDialog.person_name,
       });
       toast.success("Amount added to debt!");
@@ -166,30 +167,30 @@ export default function DebtsPage() {
     }
   };
 
-  const borrowed = debts?.filter((d: any) => d.type === "borrowed") || [];
-  const lent = debts?.filter((d: any) => d.type === "lent") || [];
+  const borrowed = debts?.filter((d) => d.type === "borrowed") || [];
+  const lent = debts?.filter((d) => d.type === "lent") || [];
 
-  const totalBorrowed = borrowed.reduce((s: number, d: any) => s + Number(d.amount), 0);
-  const totalLent = lent.reduce((s: number, d: any) => s + Number(d.amount), 0);
-  const totalBorrowedRemaining = borrowed.reduce((s: number, d: any) => s + Number(d.remaining_amount), 0);
-  const totalLentRemaining = lent.reduce((s: number, d: any) => s + Number(d.remaining_amount), 0);
+  const totalBorrowed = borrowed.reduce((s: number, d) => s + Number(d.amount), 0);
+  const totalLent = lent.reduce((s: number, d) => s + Number(d.amount), 0);
+  const totalBorrowedRemaining = borrowed.reduce((s: number, d) => s + Number(d.remaining_amount), 0);
+  const totalLentRemaining = lent.reduce((s: number, d) => s + Number(d.remaining_amount), 0);
   const totalPaidBack = totalBorrowed - totalBorrowedRemaining;
   const totalRecovered = totalLent - totalLentRemaining;
   const netPosition = totalBorrowedRemaining - totalLentRemaining;
 
   const getPaymentsForDebt = (debtId: string) =>
-    (allPayments || []).filter((p: any) => p.debt_id === debtId);
+    (allPayments || []).filter((p) => p.debt_id === debtId);
 
   const getAdditionsForDebt = (debtId: string) =>
-    (allAdditions || []).filter((a: any) => a.debt_id === debtId);
+    (allAdditions || []).filter((a) => a.debt_id === debtId);
 
   const displayDebts = debts || [];
 
-  const renderDebtCard = (d: any, i: number) => {
+  const renderDebtCard = (d: Tables<"debts">, i: number) => {
     const pct = Number(d.amount) > 0 ? Math.min(((Number(d.amount) - Number(d.remaining_amount)) / Number(d.amount)) * 100, 100) : 0;
     const payments = getPaymentsForDebt(d.id);
     const additions = getAdditionsForDebt(d.id);
-    const totalAdditions = additions.reduce((s: number, a: any) => s + Number(a.amount), 0);
+    const totalAdditions = additions.reduce((s: number, a) => s + Number(a.amount), 0);
     const isExpanded = expanded[d.id];
     const originalAmount = Number(d.amount) - totalAdditions;
 
@@ -301,7 +302,7 @@ export default function DebtsPage() {
             {additions.length > 0 && (
               <>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Additions</p>
-                {additions.map((a: any) => {
+                {additions.map((a) => {
                   const additionWalletName = wallets?.find((w) => w.id === a.wallet_id)?.name;
 
                   return (
@@ -320,7 +321,7 @@ export default function DebtsPage() {
             {payments.length > 0 && (
               <>
                 <p className="text-xs text-muted-foreground font-medium uppercase tracking-wider mt-2">Payments</p>
-                {payments.map((p: any) => (
+                {payments.map((p) => (
                   <div key={p.id} className="flex items-center justify-between text-sm">
                     <div>
                       <span className="text-muted-foreground">{format(new Date(p.date), "MMM d, yyyy")}</span>
@@ -337,7 +338,7 @@ export default function DebtsPage() {
     );
   };
 
-  const sortedDebts = (list: any[]) => {
+  const sortedDebts = (list: Tables<"debts">[]) => {
     const ongoing = list.filter((d) => !d.settled);
     const settled = list.filter((d) => d.settled);
     return [...ongoing, ...settled];
@@ -399,7 +400,7 @@ export default function DebtsPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <AnimatePresence>
-                {sortedDebts(borrowed).map((d: any, i: number) => renderDebtCard(d, i))}
+                {sortedDebts(borrowed).map((d, i) => renderDebtCard(d, i))}
               </AnimatePresence>
             </div>
           )}
@@ -413,7 +414,7 @@ export default function DebtsPage() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <AnimatePresence>
-                {sortedDebts(lent).map((d: any, i: number) => renderDebtCard(d, i))}
+                {sortedDebts(lent).map((d, i) => renderDebtCard(d, i))}
               </AnimatePresence>
             </div>
           )}

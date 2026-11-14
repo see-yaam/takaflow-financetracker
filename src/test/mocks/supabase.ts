@@ -28,6 +28,8 @@ export interface MockCall {
 export function createSupabaseMock() {
   const replies = new Map<string, MockReply[]>();
   const calls: MockCall[] = [];
+  type AuthListener = (event: string, session: { user: { id: string } } | null) => void;
+  const authListeners: AuthListener[] = [];
   let sessionUserId: string | null = "user-a";
 
   const resolveReply = async (key: string, op: string) => {
@@ -110,7 +112,12 @@ export function createSupabaseMock() {
     refreshSession: vi.fn(async () => ({ data: { session: null }, error: null })),
     setSession: vi.fn(async () => ({ data: { session: null }, error: null })),
     signOut: vi.fn(async () => ({ error: null })),
-    onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe: vi.fn() } } })),
+    updateUser: vi.fn(async () => ({ data: { user: null }, error: null as unknown })),
+    resetPasswordForEmail: vi.fn(async () => ({ data: {}, error: null as unknown })),
+    onAuthStateChange: vi.fn((cb: AuthListener) => {
+      authListeners.push(cb);
+      return { data: { subscription: { unsubscribe: vi.fn(() => authListeners.splice(authListeners.indexOf(cb), 1)) } } };
+    }),
   };
 
   const functions = { invoke: vi.fn(async () => ({ data: null, error: null })) };
@@ -129,6 +136,10 @@ export function createSupabaseMock() {
     setSessionUser(uid: string | null) {
       sessionUserId = uid;
     },
+    /** Fires an auth event to every onAuthStateChange subscriber. */
+    emitAuth(event: string, uid: string | null = sessionUserId) {
+      for (const l of [...authListeners]) l(event, uid ? { user: { id: uid } } : null);
+    },
     callsTo(table: string, op?: string) {
       return calls.filter((c) => c.table === table && (!op || c.op === op));
     },
@@ -140,6 +151,9 @@ export function createSupabaseMock() {
       auth.refreshSession.mockClear();
       auth.setSession.mockClear();
       auth.signOut.mockClear();
+      auth.updateUser.mockClear();
+      auth.resetPasswordForEmail.mockClear();
+      authListeners.length = 0;
       functions.invoke.mockClear();
     },
   };

@@ -28,7 +28,9 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (hasWallets && !isMarkedOnboarded && typeof window !== "undefined") {
     try {
       localStorage.setItem(`takaflow_onboarded_${user.id}`, "true");
-    } catch {}
+    } catch {
+        // best effort: ignore
+      }
   }
 
   // Only redirect to onboarding if wallets definitively finished loading without error and returned 0 wallets

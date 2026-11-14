@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import type { TransactionRow } from "@/hooks/useTransactions";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, addMonths, subMonths } from "date-fns";
 import { useTransactions, useReverseTransaction } from "@/hooks/useTransactions";
 import { ChevronLeft, ChevronRight, Plus, Undo2, Pencil } from "lucide-react";
@@ -18,8 +19,8 @@ export default function CalendarPage() {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [reverseTarget, setReverseTarget] = useState<any>(null);
-  const [editTarget, setEditTarget] = useState<any>(null);
+  const [reverseTarget, setReverseTarget] = useState<TransactionRow | null>(null);
+  const [editTarget, setEditTarget] = useState<TransactionRow | null>(null);
 
   const month = format(currentDate, "yyyy-MM");
   const { data: transactions } = useTransactions({ month });
@@ -46,7 +47,7 @@ export default function CalendarPage() {
       if (!txs) continue;
       let income = 0, expense = 0;
       for (const t of txs) {
-        if ((t as any).is_reversed) continue;
+        if (t.is_reversed) continue;
         if (t.type === "income") income += Number(t.amount);
         else expense += Number(t.amount);
       }
@@ -155,7 +156,7 @@ export default function CalendarPage() {
             <p className="text-sm text-muted-foreground">No transactions on this date.</p>
           ) : (
             <div className="space-y-0">
-              {selectedTxs.map((t: any) => {
+              {selectedTxs.map((t) => {
                 const isReversed = t.is_reversed;
                 return (
                   <div key={t.id} className={`transaction-row ${isReversed ? "opacity-50" : ""}`}>

@@ -13,6 +13,26 @@ export default defineConfig(({ mode }) => ({
     },
   },
   plugins: [react(), mode === "development" && componentTagger()].filter(Boolean),
+  build: {
+    rollupOptions: {
+      output: {
+        // Split stable vendor code out of the entry chunk (better caching, smaller first load).
+        manualChunks(id: string) {
+          if (!id.includes("node_modules")) return undefined;
+          if (/[/](react|react-dom|scheduler)[/]/.test(id)) return "vendor-react";
+          if (id.includes("react-router")) return "vendor-router";
+          if (id.includes("@supabase")) return "vendor-supabase";
+          if (id.includes("@tanstack")) return "vendor-query";
+          if (id.includes("recharts") || id.includes("d3-") || id.includes("victory-vendor")) return "vendor-charts";
+          if (id.includes("framer-motion")) return "vendor-motion";
+          if (id.includes("@radix-ui") || id.includes("cmdk") || id.includes("vaul")) return "vendor-ui";
+          if (id.includes("date-fns")) return "vendor-dates";
+          if (id.includes("zod") || id.includes("react-hook-form")) return "vendor-forms";
+          return undefined;
+        },
+      },
+    },
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "./src"),

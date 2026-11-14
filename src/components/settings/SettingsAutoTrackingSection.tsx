@@ -2,11 +2,19 @@ import { useState, useEffect } from "react";
 import { Bell, CheckCircle2, AlertCircle, ExternalLink, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Capacitor } from "@capacitor/core";
-import { checkNotificationPermission, openNotificationSettings } from "@/hooks/useAutoSmsSync";
+import {
+  checkNotificationPermission,
+  getSmsPermission,
+  openAppSettings,
+  openNotificationSettings,
+  requestSmsPermission,
+  SmsPermission,
+} from "@/hooks/useAutoSmsSync";
 import { clearUnparsedSms, getUnparsedSms, UnparsedSms } from "@/lib/smsIngest";
 
 export default function SettingsAutoTrackingSection() {
   const [isEnabled, setIsEnabled] = useState<boolean | null>(null);
+  const [smsPerm, setSmsPerm] = useState<SmsPermission>("unsupported");
   const [unparsed, setUnparsed] = useState<UnparsedSms[]>(() => getUnparsedSms());
   const [showUnparsed, setShowUnparsed] = useState(false);
   const isNative = Capacitor.isNativePlatform();
@@ -15,6 +23,7 @@ export default function SettingsAutoTrackingSection() {
     if (!isNative) return;
     const active = await checkNotificationPermission();
     setIsEnabled(active);
+    setSmsPerm(await getSmsPermission());
     setUnparsed(getUnparsedSms());
   };
 
@@ -78,6 +87,36 @@ export default function SettingsAutoTrackingSection() {
         </div>
         <p>• <strong>Incoming money (Income):</strong> Automatically captured from SMS & receipts.</p>
         <p>• <strong>Send Money & Payments (Expense):</strong> Automatically captured from bKash & Nagad app notifications.</p>
+      </div>
+
+      <div className="flex items-center justify-between gap-3 rounded-lg border border-border/50 p-3">
+        <div className="text-xs">
+          <p className="font-medium text-foreground">Direct SMS capture</p>
+          <p className="text-muted-foreground">
+            {smsPerm === "granted"
+              ? "Allowed: bank & MFS SMS are captured even when notifications are hidden."
+              : smsPerm === "denied"
+              ? "Blocked. Open app settings and allow SMS so incoming bank/MFS SMS are not missed."
+              : "Not allowed yet: incoming SMS are only captured through notifications."}
+          </p>
+        </div>
+        {smsPerm === "granted" ? (
+          <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+        ) : (
+          <Button
+            variant="outline"
+            className="h-8 text-xs shrink-0"
+            onClick={async () => {
+              if (smsPerm === "denied") {
+                await openAppSettings();
+              } else {
+                setSmsPerm(await requestSmsPermission());
+              }
+            }}
+          >
+            {smsPerm === "denied" ? "Open settings" : "Allow SMS"}
+          </Button>
+        )}
       </div>
 
       {unparsed.length > 0 && (

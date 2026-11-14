@@ -89,7 +89,7 @@ export default function SettingsCategoriesSection() {
   const usageCount = (c: CustomCategory) => {
     if (!transactions) return 0;
     const label = formatCategoryLabel(c);
-    return (transactions as any[]).filter((t) => t.category === label || t.category === c.name).length;
+    return (transactions ?? []).filter((t) => t.category === label || t.category === c.name).length;
   };
 
   const handleConfirmDelete = async () => {

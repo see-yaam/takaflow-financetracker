@@ -85,7 +85,9 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
     setSelectedLang(newLang);
     try {
       localStorage.setItem("takaflow_voice_lang", newLang);
-    } catch {}
+    } catch {
+        // best effort: ignore
+      }
     resetTranscript();
     setParsed(null);
     if (isListening) {
@@ -97,7 +99,9 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
   const handlePointerDown = (e: React.PointerEvent<HTMLButtonElement>) => {
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
-    } catch {}
+    } catch {
+        // best effort: ignore
+      }
 
     // If already listening from a previous tap, this click toggles it off
     if (isListening && !isHolding) {
@@ -108,7 +112,9 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
         if (typeof navigator !== "undefined" && navigator.vibrate) {
           navigator.vibrate(20);
         }
-      } catch {}
+      } catch {
+        // best effort: ignore
+      }
       return;
     }
 
@@ -122,13 +128,17 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
       if (typeof navigator !== "undefined" && navigator.vibrate) {
         navigator.vibrate(40);
       }
-    } catch {}
+    } catch {
+        // best effort: ignore
+      }
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {}
+    } catch {
+        // best effort: ignore
+      }
 
     if (!holdStartRef.current) return;
     const duration = Date.now() - holdStartRef.current;
@@ -142,7 +152,9 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
         if (typeof navigator !== "undefined" && navigator.vibrate) {
           navigator.vibrate(25);
         }
-      } catch {}
+      } catch {
+        // best effort: ignore
+      }
     }
     // If quick tap (< 220ms), it remains active in hands-free tap mode
   };
@@ -150,7 +162,9 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
   const handlePointerCancel = (e: React.PointerEvent<HTMLButtonElement>) => {
     try {
       e.currentTarget.releasePointerCapture(e.pointerId);
-    } catch {}
+    } catch {
+        // best effort: ignore
+      }
     if (holdStartRef.current) {
       holdStartRef.current = null;
       setIsHolding(false);
@@ -300,7 +314,7 @@ export default function VoiceTransactionModal({ open, onOpenChange }: Props) {
         { duration: 4000 }
       );
       onOpenChange(false);
-    } catch (err: any) {
+    } catch (err) {
       toast.error("Failed to save transaction: " + (err?.message || "Unknown error"));
     } finally {
       setIsSaving(false);

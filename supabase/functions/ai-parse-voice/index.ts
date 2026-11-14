@@ -2,6 +2,19 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 import { corsHeadersFor } from "../_shared/cors.ts";
+import { geminiGenerateJson } from "../_shared/gemini.ts";
+
+const VOICE_SCHEMA = {
+  type: "OBJECT",
+  properties: {
+    amount: { type: "NUMBER" },
+    type: { type: "STRING", enum: ["income", "expense"] },
+    category: { type: "STRING" },
+    note: { type: "STRING" },
+    detectedWallet: { type: "STRING", nullable: true },
+  },
+  required: ["amount", "type"],
+};
 
 function getCorsHeaders(req: Request) {
   return corsHeadersFor(req.headers.get("Origin"), Deno.env.get("ALLOWED_ORIGIN"));
@@ -49,90 +62,40 @@ serve(async (req) => {
       });
     }
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
-
-    // 1. Try Lovable AI gateway if configured
-    if (LOVABLE_API_KEY) {
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            {
-              role: "system",
-              content: `You are an expert financial transaction voice parser for Bangladeshi users.
+    if (GEMINI_API_KEY) {
+      try {
+        const raw = await geminiGenerateJson<Record<string, unknown>>({
+          apiKey: GEMINI_API_KEY,
+          system: `You are an expert financial transaction voice parser for Bangladeshi users.
 Parse spoken Bengali, Banglish, or English speech into a transaction JSON.
 Rules:
-- amount: positive number (e.g. 100, 500).
-- type: 'income' or 'expense'.
+- amount: positive number (convert Bengali digits/number words such as '৫০০', 'পাঁচশো', 'pachsho').
+- type: 'income' or 'expense' (default 'expense' unless money was received/earned).
 - category: strictly in English (e.g. 'Food & Dining', 'Groceries', 'Transport', 'Healthcare', 'Lost Money', 'Education', 'Salary').
-- note: concise clean note.
-- detectedWallet: wallet name if mentioned (e.g. 'Cash', 'bKash', 'Bank', 'Pocket'). Pocket/মানিব্যাগ refers to Cash or Pocket.
-Categories hint: ${JSON.stringify(categories || [])}
-Wallets hint: ${JSON.stringify(wallets || [])}`,
-            },
-            {
-              role: "user",
-              content: `Parse this speech: "${text}"`,
-            },
-          ],
-          response_format: { type: "json_object" },
-        }),
-      });
-
-      if (response.ok) {
-        const json = await response.json();
-        const content = json?.choices?.[0]?.message?.content;
-        if (content) {
-          const parsed = JSON.parse(content);
-          return new Response(JSON.stringify(parsed), {
+- note: concise clean note without amounts or currency words.
+- detectedWallet: wallet name if mentioned (e.g. 'Cash', 'bKash', 'Bank', 'Pocket'), else null. Pocket/মানিব্যাগ refers to Cash or Pocket.
+Prefer these categories when they fit: ${JSON.stringify(categories || [])}
+Wallet names: ${JSON.stringify(wallets || [])}`,
+          parts: [{ text: `Parse this speech: "${String(text).slice(0, 1000)}"` }],
+          responseSchema: VOICE_SCHEMA,
+          temperature: 0.1,
+        });
+        const amount = Number(raw?.amount);
+        if (Number.isFinite(amount) && amount > 0) {
+          const result = {
+            amount,
+            type: raw?.type === "income" ? "income" : "expense",
+            category: typeof raw?.category === "string" ? raw.category : null,
+            note: typeof raw?.note === "string" ? raw.note : null,
+            detectedWallet: typeof raw?.detectedWallet === "string" ? raw.detectedWallet : null,
+          };
+          return new Response(JSON.stringify(result), {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-      }
-    }
-
-    // 2. Try direct Google Gemini API if GEMINI_API_KEY is configured
-    if (GEMINI_API_KEY) {
-      const geminiRes = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: "user",
-                parts: [
-                  {
-                    text: `Parse Bangladeshi financial voice input into JSON with keys (amount: number, type: 'income'|'expense', category: string in English, note: string, detectedWallet: string or null).
-Speech: "${text}"
-Existing categories: ${JSON.stringify(categories || [])}
-Wallets: ${JSON.stringify(wallets || [])}`,
-                  },
-                ],
-              },
-            ],
-            generationConfig: {
-              responseMimeType: "application/json",
-            },
-          }),
-        }
-      );
-
-      if (geminiRes.ok) {
-        const data = await geminiRes.json();
-        const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (raw) {
-          return new Response(raw, {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
+      } catch (aiErr) {
+        console.error("Gemini voice parse error:", aiErr);
       }
     }
 
@@ -143,8 +106,8 @@ Wallets: ${JSON.stringify(wallets || [])}`,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       }
     );
-  } catch (err: any) {
-    return new Response(JSON.stringify({ error: err?.message || "Internal server error" }), {
+  } catch (err) {
+    return new Response(JSON.stringify({ error: err instanceof Error ? err.message : "Internal server error" }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });

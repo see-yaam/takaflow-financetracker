@@ -6,11 +6,19 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
 import java.util.HashSet;
 import java.util.Set;
 import org.json.JSONArray;
 
-@CapacitorPlugin(name = "SmsReader")
+// "sms" alias: Capacitor exposes checkPermissions()/requestPermissions({ permissions: ["sms"] }) to JS.
+// RECEIVE_SMS is a dangerous permission: without a runtime grant SmsReceiver never gets broadcasts.
+@CapacitorPlugin(
+    name = "SmsReader",
+    permissions = {
+        @Permission(alias = "sms", strings = { android.Manifest.permission.RECEIVE_SMS, android.Manifest.permission.READ_SMS })
+    }
+)
 public class SmsReaderPlugin extends Plugin {
 
     /**
@@ -70,6 +78,23 @@ public class SmsReaderPlugin extends Plugin {
             call.resolve(ret);
         } catch (Exception e) {
             call.reject("Failed to check notification permission: " + e.getMessage());
+        }
+    }
+
+    /** Opens this app's system settings page (the only way back after "Don't ask again"). */
+    @PluginMethod
+    public void openAppSettings(PluginCall call) {
+        try {
+            android.content.Context context = getContext();
+            android.content.Intent intent = new android.content.Intent(
+                android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                android.net.Uri.fromParts("package", context.getPackageName(), null)
+            );
+            intent.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(intent);
+            call.resolve();
+        } catch (Exception e) {
+            call.reject("Failed to open app settings: " + e.getMessage());
         }
     }
 

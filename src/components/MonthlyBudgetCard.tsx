@@ -20,8 +20,8 @@ export default function MonthlyBudgetCard() {
   const [budgetInput, setBudgetInput] = useState("");
 
   const monthExpense = (monthTx || [])
-    .filter((t: any) => t.type === "expense" && !t.is_reversed)
-    .reduce((s: number, t: any) => s + Number(t.amount), 0);
+    .filter((t) => t.type === "expense" && !t.is_reversed)
+    .reduce((s: number, t) => s + Number(t.amount), 0);
 
   const budget = budgetGoal ? Number(budgetGoal.monthly_budget) : 0;
   const pct = budget > 0 ? Math.min((monthExpense / budget) * 100, 100) : 0;

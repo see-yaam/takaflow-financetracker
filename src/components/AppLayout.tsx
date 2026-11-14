@@ -1,5 +1,5 @@
 import { Outlet, useLocation, Link } from "react-router-dom";
-import { LayoutDashboard, Calendar, BarChart3, Wallet, LogOut, Target, Handshake, User, Mic } from "lucide-react";
+import { LayoutDashboard, Calendar, BarChart3, Wallet, LogOut, Target, Handshake, User, Mic, List } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -8,9 +8,11 @@ import VoiceTransactionModal from "@/components/voice/VoiceTransactionModal";
 import { useAutoSmsSync } from "@/hooks/useAutoSmsSync";
 import OfflineSyncBadge from "@/components/OfflineSyncBadge";
 import SyncIssuesDialog from "@/components/SyncIssuesDialog";
+import SmsPermissionBanner from "@/components/SmsPermissionBanner";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/transactions", icon: List, label: "Transactions" },
   { to: "/calendar", icon: Calendar, label: "Calendar" },
   { to: "/goals", icon: Target, label: "Goals" },
   { to: "/debts", icon: Handshake, label: "Debts" },
@@ -185,6 +187,7 @@ export default function AppLayout() {
       {/* Main content */}
       <main className="flex-1 flex flex-col min-h-screen pb-32 md:pb-8">
         <div className="flex-1 p-3.5 sm:p-4 md:p-8 max-w-6xl w-full mx-auto">
+          <SmsPermissionBanner />
           <Outlet />
         </div>
       </main>

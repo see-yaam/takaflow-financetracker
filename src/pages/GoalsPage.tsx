@@ -98,7 +98,7 @@ export default function GoalsPage() {
         deductFromWallet: deductWallet,
       });
       // Check if goal is now completed
-      const goal = goals?.find((g: any) => g.id === goalId);
+      const goal = goals?.find((g) => g.id === goalId);
       if (goal && Number(goal.saved_amount) + amt >= Number(goal.target_amount)) {
         setConfetti(goalId);
         setTimeout(() => setConfetti(null), 3000);
@@ -141,7 +141,7 @@ export default function GoalsPage() {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <AnimatePresence>
-          {goals?.map((g: any, i: number) => {
+          {goals?.map((g, i) => {
             const pct = Number(g.target_amount) > 0 ? Math.min((Number(g.saved_amount) / Number(g.target_amount)) * 100, 100) : 0;
             const remaining = Math.max(Number(g.target_amount) - Number(g.saved_amount), 0);
             const monthsToGoal = avgMonthlySavings > 0 ? Math.ceil(remaining / avgMonthlySavings) : null;

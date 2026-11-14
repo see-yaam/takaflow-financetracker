@@ -69,7 +69,7 @@ describe("Supabase Error Mapping & Resilience", () => {
         hint: "",
         code: "23505",
       };
-      expect(() => throwIfSupabaseError(pgError as any)).toThrow("This record already exists.");
+      expect(() => throwIfSupabaseError(pgError as unknown as Parameters<typeof throwIfSupabaseError>[0])).toThrow("This record already exists.");
     });
   });
 });

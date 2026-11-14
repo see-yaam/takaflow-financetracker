@@ -62,7 +62,7 @@ export function useSpeechRecognition() {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         stream.getTracks().forEach((track) => track.stop());
         micPermissionGranted = true;
-      } catch (micErr: any) {
+      } catch (micErr) {
         console.warn("Microphone access error:", micErr);
         if (micErr.name === "NotAllowedError" || micErr.name === "PermissionDeniedError") {
           setError("Microphone permission was denied. Please allow microphone access in phone settings.");
@@ -144,7 +144,7 @@ export function useSpeechRecognition() {
 
       recognitionRef.current = recognition;
       recognition.start();
-    } catch (err: any) {
+    } catch (err) {
       setError(err?.message || "Failed to start speech recognition");
       setIsListening(false);
     }

@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
-import { parseStrict, transactionCreateSchema } from "@/lib/validations";
+import { transactionCreateSchema } from "@/lib/validations";
 import {
   handleOfflineCreateTransaction,
   handleOfflineDeleteTransaction,
@@ -11,16 +11,50 @@ import {
   getOutbox,
   removeFromOutbox,
   findQueuedCreate,
+  handleOfflineUpdateCategory,
   processOutboxSync,
   generateUUID,
 } from "@/lib/offlineSync";
 import { toast } from "sonner";
+import { matchesTxFilters } from "@/lib/txFilters";
+import type { Tables } from "@/integrations/supabase/types";
 
-export function useTransactions(filters?: { month?: string; walletId?: string; category?: string }) {
+/** A ledger row as the UI sees it: a server row (with its wallet name) or a queued offline row. */
+export type TransactionRow = Tables<"transactions"> & {
+  wallets?: { name: string } | null;
+  _isOfflinePending?: boolean;
+};
+
+export interface TransactionFilters {
+  month?: string;
+  /** Inclusive yyyy-MM-dd range (used by the /transactions ledger). */
+  from?: string;
+  to?: string;
+  walletId?: string;
+  category?: string;
+}
+
+/** Queued (not yet synced) creates that belong in a query with these filters. */
+function queuedRowsFor(filters?: TransactionFilters): TransactionRow[] {
+  return getOutbox()
+    .filter((i) => i.type === "CREATE_TRANSACTION" && i.payload.transaction && matchesTxFilters(i.payload.transaction, filters))
+    .map((i) => ({ ...i.payload.transaction, id: i.payload.tempId, _isOfflinePending: true }) as unknown as TransactionRow);
+}
+
+/** Offline: keep the last cached rows and add queued rows that aren't in them yet. */
+function mergeQueued(cached: TransactionRow[] | undefined, queued: TransactionRow[]): TransactionRow[] {
+  const base = (cached || []).filter((r) => !r._isOfflinePending);
+  const ids = new Set(base.map((r) => r.id));
+  return [...queued.filter((q) => !ids.has(q.id)), ...base];
+}
+
+export function useTransactions(filters?: TransactionFilters) {
   const { user } = useAuth();
+  const qc = useQueryClient();
+  const queryKey = ["transactions", user?.id, filters];
   return useQuery({
-    queryKey: ["transactions", user?.id, filters],
-    queryFn: async () => {
+    queryKey,
+    queryFn: async (): Promise<TransactionRow[]> => {
       try {
         let query = supabase
           .from("transactions")
@@ -34,6 +68,8 @@ export function useTransactions(filters?: { month?: string; walletId?: string; c
           const end = `${lastDay.getFullYear()}-${String(lastDay.getMonth() + 1).padStart(2, "0")}-${String(lastDay.getDate()).padStart(2, "0")}`;
           query = query.gte("date", start).lte("date", end);
         }
+        if (filters?.from) query = query.gte("date", filters.from);
+        if (filters?.to) query = query.lte("date", filters.to);
         if (filters?.walletId) query = query.eq("wallet_id", filters.walletId);
         if (filters?.category) query = query.eq("category", filters.category);
         const { data, error } = await query;
@@ -41,10 +77,8 @@ export function useTransactions(filters?: { month?: string; walletId?: string; c
         if (error) {
           if (isNetworkError(error)) {
             console.warn("Network error fetching transactions, using offline outbox fallback");
-            const outboxTxs = getOutbox()
-              .filter((i) => i.type === "CREATE_TRANSACTION")
-              .map((i) => ({ ...i.payload.transaction, id: i.payload.tempId, _isOfflinePending: true }));
-            return outboxTxs;
+            const outboxTxs = queuedRowsFor(filters);
+            return mergeQueued(qc.getQueryData<TransactionRow[]>(queryKey), outboxTxs);
           }
           throwIfSupabaseError(error);
         }
@@ -58,9 +92,7 @@ export function useTransactions(filters?: { month?: string; walletId?: string; c
           if (txId && existingIds.has(txId)) removeFromOutbox(item.id);
         }
 
-        const outboxTxs = getOutbox()
-          .filter((i) => i.type === "CREATE_TRANSACTION")
-          .map((i) => ({ ...i.payload.transaction, id: i.payload.tempId, _isOfflinePending: true }));
+        const outboxTxs = queuedRowsFor(filters);
 
         const combined = [...(data || [])];
         for (const ot of outboxTxs) {
@@ -69,14 +101,12 @@ export function useTransactions(filters?: { month?: string; walletId?: string; c
             combined.unshift(ot as unknown as (typeof combined)[number]);
           }
         }
-        return combined;
-      } catch (err: any) {
+        return combined as TransactionRow[];
+      } catch (err) {
         if (isNetworkError(err)) {
           console.warn("Network exception fetching transactions, using offline outbox fallback");
-          const outboxTxs = getOutbox()
-            .filter((i) => i.type === "CREATE_TRANSACTION")
-            .map((i) => ({ ...i.payload.transaction, id: i.payload.tempId, _isOfflinePending: true }));
-          return outboxTxs;
+          const outboxTxs = queuedRowsFor(filters);
+          return mergeQueued(qc.getQueryData<TransactionRow[]>(queryKey), outboxTxs);
         }
         throw err;
       }
@@ -94,7 +124,7 @@ export function useCreateTransaction() {
   return useMutation({
     networkMode: "offlineFirst",
     mutationFn: async (tx: { wallet_id: string; type: string; amount: number; category: string; note?: string; date?: string }) => {
-      const parsed = parseStrict(transactionCreateSchema, {
+      const parsed = transactionCreateSchema.parse({
         ...tx,
         date: tx.date || new Date().toISOString().slice(0, 10),
       });
@@ -104,7 +134,9 @@ export function useCreateTransaction() {
         try {
           const { data: sessionData } = await supabase.auth.getSession();
           resolvedUserId = sessionData?.session?.user?.id;
-        } catch {}
+        } catch {
+        // best effort: ignore
+      }
       }
 
       if (!resolvedUserId) {
@@ -121,7 +153,7 @@ export function useCreateTransaction() {
         const txId = generateUUID();
         const { data, error } = await supabase
           .from("transactions")
-          .insert({ id: txId, ...parsed, user_id: resolvedUserId } as any)
+          .insert({ id: txId, ...parsed, user_id: resolvedUserId })
           .select("*, wallets(name)")
           .single();
 
@@ -132,7 +164,7 @@ export function useCreateTransaction() {
           throwIfSupabaseError(error);
         }
         return data;
-      } catch (err: any) {
+      } catch (err) {
         // Fallback to offline queue if network connection failed
         if (isNetworkError(err)) {
           return handleOfflineCreateTransaction(parsed, resolvedUserId, qc);
@@ -140,8 +172,8 @@ export function useCreateTransaction() {
         throw err;
       }
     },
-    onSuccess: (data: any) => {
-      if (data?._isOfflinePending) {
+    onSuccess: (data) => {
+      if ((data as { _isOfflinePending?: boolean } | null)?._isOfflinePending) {
         if (typeof navigator !== "undefined" && navigator.onLine) {
           processOutboxSync(qc);
         } else {
@@ -173,7 +205,7 @@ export function useDeleteTransaction() {
           }
           throwIfSupabaseError(error);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (isNetworkError(err)) {
           handleOfflineDeleteTransaction(id, qc);
           return;
@@ -201,7 +233,7 @@ export function useReverseTransaction() {
       try {
         const { error } = await supabase
           .from("transactions")
-          .update({ is_reversed: true } as any)
+          .update({ is_reversed: true })
           .eq("id", id);
         if (error) {
           if (isNetworkError(error)) {
@@ -210,7 +242,7 @@ export function useReverseTransaction() {
           }
           throwIfSupabaseError(error);
         }
-      } catch (err: any) {
+      } catch (err) {
         if (isNetworkError(err)) {
           handleOfflineReverseTransaction(id, qc);
           return;
@@ -230,11 +262,25 @@ export function useUpdateTransactionCategory() {
   return useMutation({
     networkMode: "offlineFirst",
     mutationFn: async ({ id, category }: { id: string; category: string }) => {
-      const { error } = await supabase
-        .from("transactions")
-        .update({ category: category.trim() } as any)
-        .eq("id", id);
-      throwIfSupabaseError(error);
+      const clean = category.trim();
+      if ((typeof navigator !== "undefined" && !navigator.onLine) || findQueuedCreate(id, "CREATE_TRANSACTION")) {
+        handleOfflineUpdateCategory(id, clean, qc);
+        return;
+      }
+      try {
+        const { error } = await supabase.from("transactions").update({ category: clean }).eq("id", id);
+        if (error && isNetworkError(error)) {
+          handleOfflineUpdateCategory(id, clean, qc);
+          return;
+        }
+        throwIfSupabaseError(error);
+      } catch (err) {
+        if (isNetworkError(err)) {
+          handleOfflineUpdateCategory(id, clean, qc);
+          return;
+        }
+        throw err;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["transactions"] });

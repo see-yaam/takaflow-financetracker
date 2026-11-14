@@ -1,63 +1,86 @@
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useEffect, useMemo, useState } from "react";
 import { useWallets } from "@/hooks/useWallets";
+import { useTransferFunds } from "@/hooks/useTransfers";
+import { useCurrencyRates } from "@/hooks/useCurrencyRates";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { supabase } from "@/integrations/supabase/client";
 import { mapSupabaseError } from "@/lib/supabaseErrors";
 import { transferSchema } from "@/lib/validations";
+import { convertAmount } from "@/lib/fx";
+import { formatMoney } from "@/lib/utils";
 import { toast } from "sonner";
-import { ArrowRightLeft } from "lucide-react";
+import { ArrowRightLeft, WifiOff } from "lucide-react";
 
 export default function SettingsTransferSection() {
   const { data: wallets } = useWallets();
-  const qc = useQueryClient();
+  const { data: rates } = useCurrencyRates();
+  const transfer = useTransferFunds();
   const [transferFrom, setTransferFrom] = useState("");
   const [transferTo, setTransferTo] = useState("");
   const [transferAmount, setTransferAmount] = useState("");
-  const [transferring, setTransferring] = useState(false);
+  const [convertedInput, setConvertedInput] = useState("");
+  const [online, setOnline] = useState(() => (typeof navigator === "undefined" ? true : navigator.onLine));
+
+  useEffect(() => {
+    const on = () => setOnline(true);
+    const off = () => setOnline(false);
+    window.addEventListener("online", on);
+    window.addEventListener("offline", off);
+    return () => {
+      window.removeEventListener("online", on);
+      window.removeEventListener("offline", off);
+    };
+  }, []);
+
+  const fromWallet = wallets?.find((w) => w.id === transferFrom);
+  const toWallet = wallets?.find((w) => w.id === transferTo);
+  const fromCur = fromWallet?.currency || "BDT";
+  const toCur = toWallet?.currency || "BDT";
+  const crossCurrency = !!fromWallet && !!toWallet && fromCur !== toCur;
+  const amountNum = parseFloat(transferAmount);
+  const suggested = useMemo(
+    () => (crossCurrency && amountNum > 0 ? convertAmount(amountNum, fromCur, toCur, rates) : null),
+    [crossCurrency, amountNum, fromCur, toCur, rates]
+  );
+
+  // Prefill the credited amount from the live rate whenever inputs change; the user can edit it.
+  useEffect(() => {
+    setConvertedInput(suggested != null ? String(suggested) : "");
+  }, [suggested]);
 
   const handleTransfer = async () => {
-    const amt = parseFloat(transferAmount);
     try {
       const parsed = transferSchema.parse({
         fromWalletId: transferFrom,
         toWalletId: transferTo,
-        amount: amt,
+        amount: amountNum,
       });
 
-      const fromWallet = wallets?.find((w) => w.id === parsed.fromWalletId);
       if (fromWallet && Number(fromWallet.balance) < parsed.amount) {
         toast.error("Insufficient balance");
         return;
       }
+      const converted = crossCurrency ? parseFloat(convertedInput) : undefined;
+      if (crossCurrency && !(converted && converted > 0)) {
+        toast.error(`Enter how much ${toCur} the ${toWallet?.name} wallet receives`);
+        return;
+      }
 
-      setTransferring(true);
-      const toWallet = wallets?.find((w) => w.id === parsed.toWalletId);
-      const newFromBal = Number(fromWallet?.balance || 0) - parsed.amount;
-      const newToBal = Number(toWallet?.balance || 0) + parsed.amount;
-
-      const { error: e1 } = await supabase
-        .from("wallets")
-        .update({ balance: newFromBal })
-        .eq("id", parsed.fromWalletId);
-      if (e1) throw e1;
-
-      const { error: e2 } = await supabase
-        .from("wallets")
-        .update({ balance: newToBal })
-        .eq("id", parsed.toWalletId);
-      if (e2) throw e2;
-
-      toast.success("Transfer completed");
+      await transfer.mutateAsync({
+        fromWalletId: parsed.fromWalletId,
+        toWalletId: parsed.toWalletId,
+        amount: parsed.amount,
+        convertedAmount: converted,
+      });
+      toast.success(
+        crossCurrency
+          ? `Transferred ${formatMoney(parsed.amount, fromCur)} → ${formatMoney(converted as number, toCur)}`
+          : "Transfer completed"
+      );
       setTransferAmount("");
-      qc.invalidateQueries({ queryKey: ["wallets"] });
-      qc.invalidateQueries({ queryKey: ["transactions"] });
     } catch (e) {
       toast.error(mapSupabaseError(e));
-    } finally {
-      setTransferring(false);
     }
   };
 
@@ -74,7 +97,7 @@ export default function SettingsTransferSection() {
           <SelectContent className="bg-popover border-border">
             {wallets?.map((w) => (
               <SelectItem key={w.id} value={w.id}>
-                {w.name}
+                {w.name} ({w.currency || "BDT"})
               </SelectItem>
             ))}
           </SelectContent>
@@ -86,7 +109,7 @@ export default function SettingsTransferSection() {
           <SelectContent className="bg-popover border-border">
             {wallets?.map((w) => (
               <SelectItem key={w.id} value={w.id}>
-                {w.name}
+                {w.name} ({w.currency || "BDT"})
               </SelectItem>
             ))}
           </SelectContent>
@@ -95,16 +118,40 @@ export default function SettingsTransferSection() {
           type="number"
           value={transferAmount}
           onChange={(e) => setTransferAmount(e.target.value)}
-          placeholder="Amount"
+          placeholder={`Amount (${fromCur})`}
+          aria-label="Transfer amount"
           className="bg-secondary border-border"
         />
       </div>
+
+      {crossCurrency && (
+        <div className="mt-3 space-y-1">
+          <label className="text-xs text-muted-foreground" htmlFor="transfer-converted">
+            {toWallet?.name} receives ({toCur}){suggested != null ? " — prefilled from today's rate, edit if your rate differs" : ""}
+          </label>
+          <Input
+            id="transfer-converted"
+            type="number"
+            value={convertedInput}
+            onChange={(e) => setConvertedInput(e.target.value)}
+            placeholder={`Amount in ${toCur}`}
+            className="bg-secondary border-border"
+          />
+        </div>
+      )}
+
+      {!online && (
+        <p className="mt-3 flex items-center gap-1.5 text-xs text-amber-500">
+          <WifiOff className="h-3.5 w-3.5" /> Transfers need a connection so both wallets update together.
+        </p>
+      )}
+
       <Button
         onClick={handleTransfer}
-        disabled={transferring}
+        disabled={transfer.isPending || !online}
         className="mt-3 bg-primary text-primary-foreground"
       >
-        {transferring ? "Transferring..." : "Execute Transfer"}
+        {transfer.isPending ? "Transferring..." : "Execute Transfer"}
       </Button>
     </div>
   );

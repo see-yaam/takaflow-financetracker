@@ -2,6 +2,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 import { corsHeadersFor } from "../_shared/cors.ts";
+import { GeminiError, geminiGenerateJson, INSIGHTS_SCHEMA, sanitizeInsights } from "../_shared/gemini.ts";
 
 function getCorsHeaders(req: Request) {
   return corsHeadersFor(req.headers.get("Origin"), Deno.env.get("ALLOWED_ORIGIN"));
@@ -51,8 +52,13 @@ serve(async (req) => {
       prevDailyAvgSpend,
     } = await req.json();
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
+    const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+    if (!GEMINI_API_KEY) {
+      return new Response(JSON.stringify({ error: "AI insights are not configured (GEMINI_API_KEY missing)." }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const systemPrompt =
       "You are a personal finance advisor. Analyze the user's spending data and give realistic, specific, actionable insights. Be direct and data-driven like an economist. Use actual numbers from the data.";
@@ -69,91 +75,31 @@ Today is ${currentDate}, ${daysLeft} days left in this month.
 Daily average spend so far: ৳${dailyAvgSpend}
 Previous month daily average: ৳${prevDailyAvgSpend}
 
-Please provide exactly 4 insights analyzing my finances.`;
+Please provide exactly 4 insights analyzing my finances: one of each type (comparison, budget, forecast, advice).`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        tools: [
-          {
-            type: "function",
-            function: {
-              name: "provide_insights",
-              description: "Return exactly 4 financial insights",
-              parameters: {
-                type: "object",
-                properties: {
-                  insights: {
-                    type: "array",
-                    items: {
-                      type: "object",
-                      properties: {
-                        type: {
-                          type: "string",
-                          enum: ["comparison", "budget", "forecast", "advice"],
-                        },
-                        title: { type: "string" },
-                        message: { type: "string" },
-                      },
-                      required: ["type", "title", "message"],
-                      additionalProperties: false,
-                    },
-                    minItems: 4,
-                    maxItems: 4,
-                  },
-                },
-                required: ["insights"],
-                additionalProperties: false,
-              },
-            },
-          },
-        ],
-        tool_choice: { type: "function", function: { name: "provide_insights" } },
-      }),
-    });
-
-    if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limit exceeded. Please try again later." }),
-          {
-            status: 429,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
+    let insights;
+    try {
+      const raw = await geminiGenerateJson({
+        apiKey: GEMINI_API_KEY,
+        system: systemPrompt,
+        parts: [{ text: userPrompt }],
+        responseSchema: INSIGHTS_SCHEMA,
+        temperature: 0.4,
+      });
+      insights = sanitizeInsights(raw);
+    } catch (err) {
+      const status = err instanceof GeminiError ? err.status : 500;
+      console.error("Gemini insights error:", err);
+      if (status === 429) {
+        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again later." }), {
+          status: 429,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "AI credits exhausted. Please add funds." }),
-          {
-            status: 402,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          },
-        );
-      }
-      const t = await response.text();
-      console.error("AI gateway error:", response.status, t);
       return new Response(JSON.stringify({ error: "AI service error" }), {
-        status: 500,
+        status: 502,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-    }
-
-    const data = await response.json();
-    const toolCall = data.choices?.[0]?.message?.tool_calls?.[0];
-    let insights = [];
-    if (toolCall?.function?.arguments) {
-      const parsed = JSON.parse(toolCall.function.arguments);
-      insights = parsed.insights || [];
     }
 
     return new Response(JSON.stringify({ insights }), {

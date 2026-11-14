@@ -76,7 +76,9 @@ export default function Onboarding() {
       if (user?.id) {
         try {
           localStorage.setItem(`takaflow_onboarded_${user.id}`, "true");
-        } catch {}
+        } catch {
+        // best effort: ignore
+      }
       }
       toast.success("Wallets initialized!");
       navigate("/dashboard");

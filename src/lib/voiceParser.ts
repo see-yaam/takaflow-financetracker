@@ -797,7 +797,7 @@ function extractNote(
     // Remove isolated single-letter Bengali genitives or prepositions left dangling (e.g. "র ", "এর ")
     .replace(/(?:^|\s)(?:র|এর|ো|ে)(?:\s|$)/g, " ")
     // Clean all punctuation from beginning and end
-    .replace(/^[\s,।.?!:;'"()[\]{}/_\-]+|[\s,।.?!:;'"()[\]{}/_\-]+$/g, "")
+    .replace(/^[\s,।.?!:;'"()[\]{}/_-]+|[\s,।.?!:;'"()[\]{}/_-]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();
 
@@ -813,7 +813,7 @@ function extractNote(
   }
 
   // Clean trailing punctuation again if any remains
-  clean = clean.replace(/[\s,।.?!:;'"()[\]{}/_\-]+$/g, "").trim();
+  clean = clean.replace(/[\s,।.?!:;'"()[\]{}/_-]+$/g, "").trim();
 
   // Capitalize first letter
   return clean.charAt(0).toUpperCase() + clean.slice(1);

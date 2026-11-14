@@ -42,7 +42,7 @@ export default function CategoryPicker({ value, onChange, placeholder = "Type or
   const pastCategories = useMemo(() => {
     if (!transactions) return [];
     const set = new Set<string>();
-    for (const t of transactions as any[]) {
+    for (const t of transactions ?? []) {
       if (t.category && !predefinedLabels.includes(t.category)) set.add(t.category);
     }
     return [...set].sort();
