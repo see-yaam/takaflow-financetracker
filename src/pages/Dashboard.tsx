@@ -166,7 +166,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 min-w-0 max-w-full overflow-x-hidden">
       {/* Hero balance */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -427,7 +427,7 @@ export default function Dashboard() {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <h3 className="wallet-label">Recent Transactions</h3>
-            <StreakBadge streak={streak} />
+            <StreakBadge streak={streak} compact />
           </div>
           {transactions && transactions.length > 0 && (
             <button
