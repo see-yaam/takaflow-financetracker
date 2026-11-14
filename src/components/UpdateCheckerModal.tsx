@@ -90,11 +90,22 @@ export default function UpdateCheckerModal() {
       }
     }
 
-    // Check on startup with 2.5s slight delay so main UI finishes mounting smoothly
-    const timer = setTimeout(checkForUpdates, 2500);
+    // Check on startup (2.5s delay so the UI settles) AND whenever the app returns to the
+    // foreground: Android usually resumes the existing WebView instead of cold-starting it,
+    // so a startup-only check missed releases published while the app sat in the background.
+    let lastCheck = 0;
+    const RECHECK_MS = 30 * 60 * 1000;
+    const maybeCheck = () => {
+      if (document.visibilityState !== "visible" || Date.now() - lastCheck < RECHECK_MS) return;
+      lastCheck = Date.now();
+      checkForUpdates();
+    };
+    const timer = setTimeout(maybeCheck, 2500);
+    document.addEventListener("visibilitychange", maybeCheck);
     return () => {
       isMounted = false;
       clearTimeout(timer);
+      document.removeEventListener("visibilitychange", maybeCheck);
     };
   }, []);
 
