@@ -96,3 +96,30 @@ export function sumIncomeExpenseInBDT(
   }
   return { income: round2(income), expense: round2(expense) };
 }
+
+/** Days left in the month including today (>= 1). */
+export function daysLeftInMonth(today: Date): number {
+  const last = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  return last - today.getDate() + 1;
+}
+
+/**
+ * Safe daily allowance: what is left of this month's budget spread over the
+ * remaining days (including today). Negative remaining means over budget.
+ */
+export function safeDailyAllowance(budget: number, spent: number, today: Date): { remaining: number; perDay: number; daysLeft: number } {
+  const daysLeft = daysLeftInMonth(today);
+  const remaining = round2(budget - spent);
+  return { remaining, perDay: remaining > 0 ? round2(remaining / daysLeft) : 0, daysLeft };
+}
+
+/**
+ * Budget runway: how many days the current balance lasts at this month's
+ * average daily spend. null when nothing has been spent yet.
+ */
+export function budgetRunwayDays(balance: number, spentThisMonth: number, today: Date): number | null {
+  const daysElapsed = today.getDate();
+  const avgDaily = spentThisMonth / daysElapsed;
+  if (!(avgDaily > 0)) return null;
+  return Math.max(0, Math.floor(balance / avgDaily));
+}

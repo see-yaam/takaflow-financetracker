@@ -1,4 +1,5 @@
 import { useState } from "react";
+import ReconcileBalanceDialog from "@/components/ReconcileBalanceDialog";
 import { useWallets, useCreateWallet, useUpdateWallet, useDeleteWallet } from "@/hooks/useWallets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,6 +19,7 @@ export default function SettingsWalletsSection() {
   const deleteWallet = useDeleteWallet();
 
   const [newWalletName, setNewWalletName] = useState("");
+  const [reconcileWallet, setReconcileWallet] = useState<{ id: string; name: string; balance: number; currency?: string | null } | null>(null);
   const [newWalletBalance, setNewWalletBalance] = useState("");
   const [newWalletCurrency, setNewWalletCurrency] = useState("BDT");
   const [editingWallet, setEditingWallet] = useState<{ id: string; name: string } | null>(null);
@@ -91,6 +93,9 @@ export default function SettingsWalletsSection() {
               </p>
             </div>
             <div className="flex gap-2">
+              <Button variant="ghost" size="sm" className="text-xs" onClick={() => setReconcileWallet(w)}>
+                Reconcile
+              </Button>
               <button
                 type="button"
                 onClick={() => {
@@ -169,6 +174,7 @@ export default function SettingsWalletsSection() {
           </Button>
         </div>
       </div>
+      <ReconcileBalanceDialog wallet={reconcileWallet} onOpenChange={(o) => !o && setReconcileWallet(null)} />
     </div>
   );
 }

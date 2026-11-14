@@ -21,6 +21,8 @@ import { ArrowDownRight, ArrowUpRight } from "lucide-react";
 import CategoryPicker from "@/components/CategoryPicker";
 import InsufficientBalanceModal, { AttemptedExpense } from "@/components/InsufficientBalanceModal";
 import { cn } from "@/lib/utils";
+import { CASH_OUT_RATES, computeCashOutFee, isMfsWallet, smsToDraft } from "@/lib/mfs";
+import { scanReceipt } from "@/lib/receiptScan";
 
 interface Props {
   open: boolean;
@@ -41,6 +43,14 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
   const [note, setNote] = useState("");
   const [date, setDate] = useState(defaultDate || format(new Date(), "yyyy-MM-dd"));
   const [recurring, setRecurring] = useState(false);
+  // P2-02: paste an SMS to prefill the form
+  const [pasteOpen, setPasteOpen] = useState(false);
+  const [pasteText, setPasteText] = useState("");
+  const [pasteError, setPasteError] = useState("");
+  const [scanning, setScanning] = useState(false);
+  // P2-04: optional MFS cash-out fee, recorded as its own expense
+  const [includeFee, setIncludeFee] = useState(false);
+  const [feeRate, setFeeRate] = useState<string>(String(CASH_OUT_RATES[1]));
   const [insufficientOpen, setInsufficientOpen] = useState(false);
   const [insufficientData, setInsufficientData] = useState<AttemptedExpense | null>(null);
   const [quickAddWalletOpen, setQuickAddWalletOpen] = useState(false);
@@ -67,10 +77,56 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
       setNote("");
       setDate(defaultDate || format(new Date(), "yyyy-MM-dd"));
       setRecurring(false);
+      setPasteOpen(false);
+      setPasteText("");
+      setPasteError("");
+      setIncludeFee(false);
       setQuickAddWalletOpen(false);
       setQuickWalletName("");
     }
   }, [open, defaultType, defaultDate]);
+
+  const selectedWallet = wallets?.find((w) => w.id === walletId);
+  const feeApplies = includeFee && type === "expense" && isMfsWallet(selectedWallet?.name);
+  const cashOutFee = feeApplies ? computeCashOutFee(parseFloat(amount), Number(feeRate)) : 0;
+
+  const applyPastedSms = () => {
+    const draft = smsToDraft(pasteText, wallets || []);
+    if (!draft) {
+      setPasteError("Couldn't read a transaction from that SMS. Check the text and try again.");
+      return;
+    }
+    setType(draft.type);
+    setAmount(String(draft.amount));
+    setCategory(draft.category);
+    setNote(draft.note);
+    if (draft.walletId) setWalletId(draft.walletId);
+    setPasteError("");
+    setPasteOpen(false);
+  };
+
+  // P3-02: receipt photo -> Gemini Vision (scan-receipt Edge Function) -> prefilled form for review.
+  const handleReceipt = async (file: File | undefined) => {
+    if (!file) return;
+    setScanning(true);
+    try {
+      const r = await scanReceipt(file);
+      if (!r.total) {
+        toast.error("Couldn't find a total on this receipt. Please enter it manually.");
+        return;
+      }
+      setType("expense");
+      setAmount(String(r.total));
+      if (r.category) setCategory(r.category);
+      setNote([r.merchant, r.vat ? `VAT ৳${r.vat}` : ""].filter(Boolean).join(" · "));
+      if (r.date) setDate(r.date);
+      toast.success("Receipt read. Check the details, then save.");
+    } catch (e) {
+      toast.error(mapSupabaseError(e));
+    } finally {
+      setScanning(false);
+    }
+  };
 
   const handleQuickAddWallet = async () => {
     const name = quickWalletName.trim();
@@ -132,6 +188,17 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
         note: note || undefined,
         date,
       });
+
+      if (feeApplies && cashOutFee > 0) {
+        await createTx.mutateAsync({
+          wallet_id: walletId,
+          type: "expense",
+          amount: cashOutFee,
+          category: "MFS Fee",
+          note: `Cash-out fee ${Number(feeRate)}% on ৳${parsedAmount.toLocaleString()}`,
+          date,
+        });
+      }
 
       if (recurring) {
         // Parse the day from "yyyy-MM-dd" directly: new Date(date) is UTC and shifts days west of GMT.
@@ -210,6 +277,50 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
             >
               <ArrowUpRight className="h-3.5 w-3.5" /> Income
             </button>
+          </div>
+
+          {/* P2-02: paste a bKash/Nagad/Bank SMS to fill the form */}
+          <div className="rounded-lg border border-border/50">
+            <button
+              type="button"
+              onClick={() => setPasteOpen((o) => !o)}
+              className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-muted-foreground"
+              aria-expanded={pasteOpen}
+            >
+              <span>📋 Paste bKash/Nagad/Bank SMS</span>
+              <span>{pasteOpen ? "▲" : "▼"}</span>
+            </button>
+            <label className="flex items-center justify-between px-3 py-2 border-t border-border/50 text-xs font-medium text-muted-foreground cursor-pointer">
+              <span>{scanning ? "⏳ Reading receipt…" : "📷 Scan a receipt"}</span>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                disabled={scanning}
+                aria-label="Scan receipt"
+                onChange={(e) => {
+                  handleReceipt(e.target.files?.[0]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            {pasteOpen && (
+              <div className="px-3 pb-3 space-y-2">
+                <textarea
+                  value={pasteText}
+                  onChange={(e) => setPasteText(e.target.value)}
+                  rows={3}
+                  aria-label="Pasted SMS"
+                  placeholder="Paste the full SMS here…"
+                  className="w-full rounded-md bg-secondary/60 border border-border p-2 text-xs"
+                />
+                {pasteError && <p className="text-xs text-destructive">{pasteError}</p>}
+                <Button type="button" size="sm" variant="outline" onClick={applyPastedSms} disabled={!pasteText.trim()}>
+                  Fill from SMS
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* Amount Input */}
@@ -323,6 +434,40 @@ export default function AddTransactionDrawer({ open, onOpenChange, defaultType =
             </div>
 
             <div className="space-y-1.5">
+              {type === "expense" && isMfsWallet(selectedWallet?.name) && (
+                <div className="mb-3 rounded-lg border border-border/50 p-3 space-y-2">
+                  <label className="flex items-center justify-between text-xs font-medium">
+                    <span>Include cash-out fee</span>
+                    <Switch checked={includeFee} onCheckedChange={setIncludeFee} aria-label="Include cash-out fee" />
+                  </label>
+                  {includeFee && (
+                    <div className="flex flex-wrap items-center gap-2 text-xs">
+                      {CASH_OUT_RATES.map((r) => (
+                        <button
+                          key={r}
+                          type="button"
+                          onClick={() => setFeeRate(String(r))}
+                          className={cn(
+                            "px-2 py-1 rounded-full border",
+                            Number(feeRate) === r ? "border-primary text-primary" : "border-border text-muted-foreground"
+                          )}
+                        >
+                          {r}%
+                        </button>
+                      ))}
+                      <Input
+                        type="number"
+                        step="0.01"
+                        value={feeRate}
+                        onChange={(e) => setFeeRate(e.target.value)}
+                        aria-label="Custom fee rate"
+                        className="h-7 w-20 text-xs"
+                      />
+                      <span className="text-muted-foreground">= ৳{cashOutFee.toLocaleString()} saved as "MFS Fee"</span>
+                    </div>
+                  )}
+                </div>
+              )}
               <Label className="text-xs font-medium text-muted-foreground">Note (optional)</Label>
               <Input
                 value={note}

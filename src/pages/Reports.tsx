@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { Link } from "react-router-dom";
 import type { TransactionRow } from "@/hooks/useTransactions";
 import { useTransactions } from "@/hooks/useTransactions";
 import { useWallets } from "@/hooks/useWallets";
@@ -288,6 +289,10 @@ export default function Reports() {
       {(Object.keys(incomeCategoryMap).length > 0 || Object.keys(expenseCategoryMap).length > 0) && (
         <MoneyFlowChart incomeByCategory={incomeCategoryMap} expenseByCategory={expenseCategoryMap} />
       )}
+
+      <Link to={`/statement/${month}`} className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline">
+        📄 Monthly statement (print / PDF)
+      </Link>
 
       {/* AI Insights */}
       {allTxForMonth.length > 0 && (

@@ -52,7 +52,7 @@ function parseReleaseFeatures(bodyText?: string): Array<{ title: string; desc: s
 
 export default function UpdateCheckerModal() {
   const [open, setOpen] = useState(false);
-  const [currentVersion, setCurrentVersion] = useState("1.0.6");
+  const [currentVersion, setCurrentVersion] = useState(__APP_VERSION__);
   const [latestRelease, setLatestRelease] = useState<GitHubRelease | null>(null);
   const [downloading, setDownloading] = useState(false);
 
@@ -66,7 +66,7 @@ export default function UpdateCheckerModal() {
 
     async function checkForUpdates() {
       try {
-        let activeVer = "1.0.6";
+        let activeVer = __APP_VERSION__;
         try {
           const info = await AppUpdater.getAppVersion();
           if (info?.versionName) {

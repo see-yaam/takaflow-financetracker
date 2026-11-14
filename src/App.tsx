@@ -20,6 +20,8 @@ const CalendarPage = lazy(() => import("@/pages/CalendarPage"));
 const GoalsPage = lazy(() => import("@/pages/GoalsPage"));
 const Reports = lazy(() => import("@/pages/Reports"));
 const TransactionsPage = lazy(() => import("@/pages/TransactionsPage"));
+const ZakatPage = lazy(() => import("@/pages/ZakatPage"));
+const StatementPage = lazy(() => import("@/pages/StatementPage"));
 const DebtsPage = lazy(() => import("@/pages/DebtsPage"));
 const SettingsPage = lazy(() => import("@/pages/SettingsPage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
@@ -108,6 +110,8 @@ const App = () => {
                     <Route path="/debts" element={<DebtsPage />} />
                     <Route path="/reports" element={<Reports />} />
                     <Route path="/transactions" element={<TransactionsPage />} />
+                    <Route path="/zakat" element={<ZakatPage />} />
+                    <Route path="/statement/:month" element={<StatementPage />} />
                     <Route path="/settings" element={<SettingsPage />} />
                     <Route path="/profile" element={<ProfilePage />} />
                   </Route>

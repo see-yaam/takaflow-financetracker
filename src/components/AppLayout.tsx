@@ -1,14 +1,17 @@
 import { Outlet, useLocation, Link } from "react-router-dom";
-import { LayoutDashboard, Calendar, BarChart3, Wallet, LogOut, Target, Handshake, User, Mic, List } from "lucide-react";
+import { LayoutDashboard, Calendar, BarChart3, Wallet, LogOut, Target, Handshake, User, Mic, List, Moon, Search } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
 import SignOutConfirmDialog from "@/components/SignOutConfirmDialog";
 import VoiceTransactionModal from "@/components/voice/VoiceTransactionModal";
 import { useAutoSmsSync } from "@/hooks/useAutoSmsSync";
+import { useBillReminderSync } from "@/hooks/useBillReminderSync";
 import OfflineSyncBadge from "@/components/OfflineSyncBadge";
 import SyncIssuesDialog from "@/components/SyncIssuesDialog";
 import SmsPermissionBanner from "@/components/SmsPermissionBanner";
+import CommandPalette from "@/components/CommandPalette";
+import AddTransactionDrawer from "@/components/AddTransactionDrawer";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -17,6 +20,7 @@ const navItems = [
   { to: "/goals", icon: Target, label: "Goals" },
   { to: "/debts", icon: Handshake, label: "Debts" },
   { to: "/reports", icon: BarChart3, label: "Reports" },
+  { to: "/zakat", icon: Moon, label: "Zakat" },
   { to: "/settings", icon: Wallet, label: "Wallet Settings" },
 ];
 
@@ -33,9 +37,12 @@ export default function AppLayout() {
   const { user, signOut } = useAuth();
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const [paletteDrawer, setPaletteDrawer] = useState<null | "income" | "expense">(null);
 
   // Background SMS Sync for Mobile Native Environment
   useAutoSmsSync();
+  // Native bill reminders 48 h before recurring expenses
+  useBillReminderSync();
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-background">
@@ -55,6 +62,14 @@ export default function AppLayout() {
 
         <div className="flex items-center gap-2">
           <OfflineSyncBadge />
+          <button
+            type="button"
+            aria-label="Open command palette"
+            onClick={() => window.dispatchEvent(new Event("takaflow_open_palette"))}
+            className="p-2 rounded-xl text-muted-foreground hover:text-foreground"
+          >
+            <Search className="h-4 w-4" />
+          </button>
           <Link
             to="/settings"
             className={cn(
@@ -235,6 +250,20 @@ export default function AppLayout() {
 
       {/* One app-wide instance; both sync badges open it via openSyncIssues() */}
       <SyncIssuesDialog />
+
+      {/* Ctrl/Cmd+K command palette (and its own add-transaction drawer) */}
+      <CommandPalette
+        actions={{
+          addIncome: () => setPaletteDrawer("income"),
+          addExpense: () => setPaletteDrawer("expense"),
+          openVoice: () => setVoiceOpen(true),
+        }}
+      />
+      <AddTransactionDrawer
+        open={paletteDrawer !== null}
+        onOpenChange={(o) => !o && setPaletteDrawer(null)}
+        defaultType={paletteDrawer ?? "expense"}
+      />
     </div>
   );
 }

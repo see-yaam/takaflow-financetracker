@@ -5,3 +5,6 @@ verify_jwt = true
 
 [functions.ai-parse-voice]
 verify_jwt = true
+
+[functions.scan-receipt]
+verify_jwt = true
