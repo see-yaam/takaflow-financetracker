@@ -12,10 +12,10 @@ import { setOnline } from "./helpers";
 import { __resetSyncStateForTests, setOutboxOwner } from "@/lib/offlineSync";
 import OfflineSyncBadge, { SYNCED_FLASH_MS } from "@/components/OfflineSyncBadge";
 
-function renderBadge() {
+function renderBadge(props: { compact?: boolean } = {}) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <OfflineSyncBadge />
+      <OfflineSyncBadge {...props} />
     </QueryClientProvider>
   );
 }
@@ -70,5 +70,20 @@ describe("OfflineSyncBadge synced confirmation", () => {
     expect(screen.getByRole("button")).toHaveTextContent("Synced");
     act(() => vi.advanceTimersByTime(100));
     expect(screen.queryByRole("button")).toBeNull();
+  });
+});
+
+describe("OfflineSyncBadge compact (phone header)", () => {
+  it("hides long words visually but keeps them for screen readers", () => {
+    setOnline(false);
+    renderBadge({ compact: true });
+    expect(screen.getByRole("button")).toHaveTextContent("Offline");
+    expect(screen.getByText("Offline")).toHaveClass("sr-only");
+  });
+
+  it("shows the full label when not compact", () => {
+    setOnline(false);
+    renderBadge();
+    expect(screen.getByText("Offline")).not.toHaveClass("sr-only");
   });
 });

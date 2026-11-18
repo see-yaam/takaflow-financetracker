@@ -47,33 +47,33 @@ export default function AppLayout() {
   return (
     <div className="flex flex-col md:flex-row min-h-screen bg-background">
       {/* Mobile Top Header */}
-      <header className="md:hidden sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border/50 px-4 h-14 flex items-center justify-between">
-        <Link to="/dashboard" className="flex items-center gap-2">
-          <span className="h-7 w-7 rounded-lg bg-primary/20 text-primary font-bold flex items-center justify-center text-sm shadow-[0_0_10px_rgba(57,255,20,0.2)]">
+      <header className="md:hidden sticky top-0 z-40 bg-background/95 backdrop-blur-md border-b border-border/50 px-3 min-[400px]:px-4 pt-[env(safe-area-inset-top)] h-[calc(3.5rem+env(safe-area-inset-top))] flex items-center justify-between gap-2 w-full max-w-full min-w-0">
+        <Link to="/dashboard" className="flex items-center gap-2 min-w-0 overflow-hidden">
+          <span className="shrink-0 h-7 w-7 rounded-lg bg-primary/20 text-primary font-bold flex items-center justify-center text-sm shadow-[0_0_10px_rgba(57,255,20,0.2)]">
             ৳
           </span>
           <span className="font-bold text-base tracking-tight text-foreground flex items-center gap-1.5">
             TakaFlow
-            <span className="text-[9px] uppercase font-mono tracking-wider px-1 py-0.2 rounded bg-primary/15 text-primary border border-primary/20">
+            <span className="hidden min-[400px]:inline text-[9px] uppercase font-mono tracking-wider px-1 py-0.2 rounded bg-primary/15 text-primary border border-primary/20">
               Vault
             </span>
           </span>
         </Link>
 
-        <div className="flex items-center gap-2">
-          <OfflineSyncBadge />
+        <div className="flex items-center gap-1 min-[400px]:gap-2 shrink-0">
+          <OfflineSyncBadge compact />
           <button
             type="button"
             aria-label="Open command palette"
             onClick={() => window.dispatchEvent(new Event("takaflow_open_palette"))}
-            className="p-2 rounded-xl text-muted-foreground hover:text-foreground"
+            className="p-1.5 min-[400px]:p-2 rounded-xl text-muted-foreground hover:text-foreground"
           >
             <Search className="h-4 w-4" />
           </button>
           <Link
             to="/settings"
             className={cn(
-              "p-2 rounded-xl transition-colors",
+              "p-1.5 min-[400px]:p-2 rounded-xl transition-colors",
               pathname === "/settings"
                 ? "text-primary bg-primary/15 font-semibold"
                 : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
@@ -112,7 +112,7 @@ export default function AppLayout() {
           <button
             type="button"
             onClick={() => setSignOutOpen(true)}
-            className="p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+            className="p-1.5 min-[400px]:p-2 rounded-xl text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
             title="Sign Out"
             aria-label="Sign Out"
           >
@@ -200,21 +200,21 @@ export default function AppLayout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 flex flex-col min-h-screen pb-32 md:pb-8 min-w-0 overflow-x-hidden">
-        <div className="flex-1 p-3.5 sm:p-4 md:p-8 max-w-6xl w-full mx-auto">
+      <main className="flex-1 flex flex-col min-h-screen pb-32 md:pb-8 min-w-0 max-w-full overflow-x-clip">
+        <div className="flex-1 p-3.5 sm:p-4 md:p-8 max-w-6xl w-full min-w-0 mx-auto">
           <SmsPermissionBanner />
           <Outlet />
         </div>
       </main>
 
       {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-secondary/95 backdrop-blur-lg border-t border-border flex justify-around py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] z-50 shadow-lg">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-secondary/95 backdrop-blur-lg border-t border-border flex justify-around py-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] pl-[env(safe-area-inset-left)] pr-[env(safe-area-inset-right)] z-50 shadow-lg">
         {mobileNavItems.map((item) => (
           <Link
             key={item.to}
             to={item.to}
             className={cn(
-              "flex flex-col items-center gap-1 px-3 py-1 text-[11px] font-medium transition-colors",
+              "flex flex-col items-center gap-1 px-2 min-[400px]:px-3 py-1 min-w-0 text-[11px] font-medium transition-colors",
               pathname === item.to
                 ? "text-primary font-semibold"
                 : "text-muted-foreground hover:text-foreground"
@@ -230,7 +230,7 @@ export default function AppLayout() {
       <button
         type="button"
         onClick={() => setVoiceOpen(true)}
-        className="fixed bottom-20 right-4 md:bottom-8 md:right-8 z-40 h-13 w-13 rounded-full bg-gradient-to-tr from-primary to-emerald-500 text-primary-foreground shadow-xl shadow-primary/25 flex items-center justify-center hover:scale-105 active:scale-95 transition-all p-3 border-2 border-background/80 group"
+        className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] right-4 md:bottom-8 md:right-8 z-40 h-13 w-13 rounded-full bg-gradient-to-tr from-primary to-emerald-500 text-primary-foreground shadow-xl shadow-primary/25 flex items-center justify-center hover:scale-105 active:scale-95 transition-all p-3 border-2 border-background/80 group"
         title="Voice Assistant"
         aria-label="Voice Assistant"
       >
