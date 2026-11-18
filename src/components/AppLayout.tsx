@@ -1,5 +1,5 @@
 import { Outlet, useLocation, Link } from "react-router-dom";
-import { LayoutDashboard, Calendar, BarChart3, Wallet, LogOut, Target, Handshake, User, Mic, List, Moon, Search } from "lucide-react";
+import { LayoutDashboard, Calendar, BarChart3, Wallet, LogOut, Target, Handshake, Mic, List, Moon, Search, LayoutGrid, ChevronRight } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { useState } from "react";
@@ -12,6 +12,7 @@ import SyncIssuesDialog from "@/components/SyncIssuesDialog";
 import SmsPermissionBanner from "@/components/SmsPermissionBanner";
 import CommandPalette from "@/components/CommandPalette";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 
 const navItems = [
   { to: "/dashboard", icon: LayoutDashboard, label: "Dashboard" },
@@ -29,7 +30,14 @@ const mobileNavItems = [
   { to: "/calendar", icon: Calendar, label: "Calendar" },
   { to: "/reports", icon: BarChart3, label: "Reports" },
   { to: "/goals", icon: Target, label: "Goals" },
-  { to: "/debts", icon: Handshake, label: "Debts" },
+];
+
+/** Phone-only "More" sheet: every page that doesn't fit in the 4 bottom tabs (Profile and Sign Out stay in the header). */
+const mobileMoreItems = [
+  { to: "/transactions", icon: List, label: "Transactions", hint: "Search, filter & export" },
+  { to: "/debts", icon: Handshake, label: "Debts", hint: "Dhar / Karz you owe or are owed" },
+  { to: "/zakat", icon: Moon, label: "Zakat", hint: "Nisab & zakat calculator" },
+  { to: "/settings", icon: Wallet, label: "Wallet Settings", hint: "Add, edit & reorder wallets" },
 ];
 
 export default function AppLayout() {
@@ -38,6 +46,8 @@ export default function AppLayout() {
   const [signOutOpen, setSignOutOpen] = useState(false);
   const [voiceOpen, setVoiceOpen] = useState(false);
   const [paletteDrawer, setPaletteDrawer] = useState<null | "income" | "expense">(null);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const moreActive = mobileMoreItems.some((item) => pathname.startsWith(item.to));
 
   // Background SMS Sync for Mobile Native Environment
   useAutoSmsSync();
@@ -70,19 +80,6 @@ export default function AppLayout() {
           >
             <Search className="h-4 w-4" />
           </button>
-          <Link
-            to="/settings"
-            className={cn(
-              "p-1.5 min-[400px]:p-2 rounded-xl transition-colors",
-              pathname === "/settings"
-                ? "text-primary bg-primary/15 font-semibold"
-                : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
-            )}
-            title="Wallet Settings"
-            aria-label="Wallet Settings"
-          >
-            <Wallet className="h-4.5 w-4.5" />
-          </Link>
           {user && (
             <Link
               to="/profile"
@@ -224,7 +221,59 @@ export default function AppLayout() {
             {item.label}
           </Link>
         ))}
+        <button
+          type="button"
+          onClick={() => setMoreOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={moreOpen}
+          className={cn(
+            "flex flex-col items-center gap-1 px-2 min-[400px]:px-3 py-1 min-w-0 text-[11px] font-medium transition-colors",
+            moreActive || moreOpen ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <LayoutGrid className="h-5 w-5" />
+          More
+        </button>
       </nav>
+
+      {/* Phone "More" sheet */}
+      <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+        <SheetContent
+          side="bottom"
+          className="md:hidden rounded-t-2xl border-border bg-card px-4 pt-5 pb-[max(1.25rem,env(safe-area-inset-bottom))]"
+        >
+          <SheetHeader className="text-left">
+            <SheetTitle>More</SheetTitle>
+            <SheetDescription className="sr-only">Other TakaFlow pages</SheetDescription>
+          </SheetHeader>
+          <nav className="mt-3 space-y-1" aria-label="More pages">
+            {mobileMoreItems.map((item) => {
+              const active = pathname.startsWith(item.to);
+              return (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setMoreOpen(false)}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex items-center gap-3 rounded-xl px-3 py-3 transition-colors",
+                    active ? "bg-primary/15 text-primary" : "text-foreground hover:bg-muted/50 active:bg-muted/60"
+                  )}
+                >
+                  <span className={cn("h-9 w-9 shrink-0 rounded-lg flex items-center justify-center", active ? "bg-primary/20" : "bg-secondary")}>
+                    <item.icon className="h-4.5 w-4.5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-sm font-medium truncate">{item.label}</span>
+                    <span className="block text-xs text-muted-foreground truncate">{item.hint}</span>
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
+                </Link>
+              );
+            })}
+          </nav>
+        </SheetContent>
+      </Sheet>
 
       {/* Floating Voice Assistant Button */}
       <button
