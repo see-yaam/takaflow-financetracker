@@ -8,6 +8,7 @@ import { useMonthRollover } from "@/hooks/useMonthRollover";
 import { useApplyRecurring } from "@/hooks/useRecurringTransactions";
 import { useDebts } from "@/hooks/useDebts";
 import { useCurrencyRates, convertToBDT } from "@/hooks/useCurrencyRates";
+import { usePrivacyMode } from "@/hooks/usePrivacyMode";
 import { format } from "date-fns";
 import { motion } from "framer-motion";
 import {
@@ -70,40 +71,13 @@ export default function Dashboard() {
   const [editTarget, setEditTarget] = useState<TransactionRow | null>(null);
   const [voiceOpen, setVoiceOpen] = useState(false);
 
-  // Hold-to-Peek Spy Privacy State
-  const [isPeeking, setIsPeeking] = useState(false);
-  const [isPrivacyLocked, setIsPrivacyLocked] = useState(() => {
-    return localStorage.getItem("takaflow_privacy_mode") !== "revealed";
-  });
-
-  const isDisguised = isPrivacyLocked && !isPeeking;
-
-  const handlePeekStart = () => {
-    if (!isPrivacyLocked) return;
-    setIsPeeking(true);
-    try {
-      if (navigator.vibrate) navigator.vibrate(15);
-    } catch {
-        // best effort: ignore
-      }
-  };
-
-  const handlePeekEnd = () => {
-    if (isPeeking) {
-      setIsPeeking(false);
-      try {
-        if (navigator.vibrate) navigator.vibrate(8);
-      } catch {
-        // best effort: ignore
-      }
-    }
-  };
+  // Privacy mode: visible by default; locking only via the explicit pill button, peeking via press-and-hold.
+  const { isLocked: isPrivacyLocked, isHidden: isDisguised, setLocked: setPrivacyLocked, peekHandlers } = usePrivacyMode();
 
   const togglePrivacyLock = (e: React.MouseEvent) => {
     e.stopPropagation();
     const next = !isPrivacyLocked;
-    setIsPrivacyLocked(next);
-    localStorage.setItem("takaflow_privacy_mode", next ? "locked" : "revealed");
+    setPrivacyLocked(next);
     if (next) {
       toast.success("🔒 Vault Privacy Active — Hold anywhere on card to peek!");
     } else {
@@ -172,35 +146,34 @@ export default function Dashboard() {
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        onMouseDown={handlePeekStart}
-        onMouseUp={handlePeekEnd}
-        onMouseLeave={handlePeekEnd}
-        onTouchStart={handlePeekStart}
-        onTouchEnd={handlePeekEnd}
-        onTouchCancel={handlePeekEnd}
-        onClick={() => {
-          setIsPrivacyLocked((prev) => {
-            const next = !prev;
-            localStorage.setItem("takaflow_privacy_mode", next ? "locked" : "revealed");
-            return next;
-          });
-        }}
-        className="vault-card p-5 sm:p-8 relative overflow-hidden select-none cursor-pointer"
+        {...peekHandlers}
+        data-testid="balance-card"
+        className={cn("vault-card p-5 sm:p-8 relative overflow-hidden select-none", isPrivacyLocked && "cursor-pointer")}
       >
         <div className="currency-watermark -top-12 -right-12 rotate-[15deg] text-accent/[0.04]">৳</div>
         <div className="flex items-center justify-between mb-2">
           <p className="wallet-label">Total Balance</p>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            {isPrivacyLocked ? (
-              <span className="flex items-center gap-1 text-[11px] bg-secondary/80 px-2 py-0.5 rounded-full border border-border/40">
-                <Lock className="h-3 w-3 text-amber-500" /> Tap to reveal
-              </span>
-            ) : (
-              <span className="flex items-center gap-1 text-[11px] bg-secondary/80 px-2 py-0.5 rounded-full border border-border/40 text-primary">
-                <Unlock className="h-3 w-3" /> Visible
-              </span>
+          <button
+            type="button"
+            onClick={togglePrivacyLock}
+            onPointerDown={(e) => e.stopPropagation()}
+            aria-pressed={isPrivacyLocked}
+            aria-label={isPrivacyLocked ? "Show balances" : "Hide balances"}
+            className={cn(
+              "flex items-center gap-1 text-[11px] bg-secondary/80 px-2.5 py-1 rounded-full border border-border/40 active:scale-95 transition-transform",
+              isPrivacyLocked ? "text-muted-foreground" : "text-primary"
             )}
-          </div>
+          >
+            {isPrivacyLocked ? (
+              <>
+                <Lock className="h-3 w-3 text-amber-500" /> Hidden · tap to show
+              </>
+            ) : (
+              <>
+                <Unlock className="h-3 w-3" /> Visible · tap to hide
+              </>
+            )}
+          </button>
         </div>
         <h2
           className={cn(
@@ -274,12 +247,7 @@ export default function Dashboard() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
-              onMouseDown={handlePeekStart}
-              onMouseUp={handlePeekEnd}
-              onMouseLeave={handlePeekEnd}
-              onTouchStart={handlePeekStart}
-              onTouchEnd={handlePeekEnd}
-              onTouchCancel={handlePeekEnd}
+              {...peekHandlers}
               className="vault-card p-4 sm:p-5 relative overflow-hidden select-none cursor-pointer w-[65vw] min-w-[210px] max-w-[260px] sm:w-auto sm:min-w-0 sm:max-w-none shrink-0 snap-start transition-transform active:scale-[0.98]"
             >
               <div className="absolute top-1 right-2 text-foreground/[0.04] text-5xl font-bold pointer-events-none select-none">৳</div>

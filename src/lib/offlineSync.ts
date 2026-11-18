@@ -352,6 +352,28 @@ export function getOutboxFor(uid: string): OutboxItem[] {
   return readAll().filter((i) => belongsTo(i, uid));
 }
 
+/**
+ * Net balance change per wallet from queued transaction creates that the server can't have
+ * applied yet. A fresh server read of `wallets` doesn't include them, so the wallet query adds
+ * these back on top; otherwise the balance jumps back until the sync lands (e.g. the refetch
+ * that fires on reconnect, racing the outbox sync). The item being sent right now is skipped:
+ * it may already be in the server's numbers.
+ */
+export function queuedWalletDeltas(): Map<string, number> {
+  const deltas = new Map<string, number>();
+  for (const item of getOutbox()) {
+    if (item.type !== "CREATE_TRANSACTION" || isInFlight(item.id)) continue;
+    const tx = item.payload?.transaction;
+    if (!tx?.wallet_id || tx.is_reversed) continue;
+    const amount = Number(tx.amount);
+    if (!Number.isFinite(amount)) continue;
+    // Same sign rule as the optimistic update in handleOfflineCreateTransaction.
+    const delta = tx.type === "income" ? amount : -amount;
+    if (delta !== 0) deltas.set(tx.wallet_id, (deltas.get(tx.wallet_id) ?? 0) + delta);
+  }
+  return deltas;
+}
+
 export function getOutboxStats(): OutboxStats {
   const items = getOutbox();
   let pending = 0;

@@ -5,7 +5,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
 import { walletCreateSchema, walletUpdateSchema } from "@/lib/validations";
 
-import { handleOfflineCreateWallet, handleOfflineDeleteWallet, isNetworkError, getOutbox, removeFromOutbox, findQueuedCreate, handleOfflineUpdateWallet, processOutboxSync, generateUUID } from "@/lib/offlineSync";
+import { handleOfflineCreateWallet, handleOfflineDeleteWallet, isNetworkError, getOutbox, removeFromOutbox, findQueuedCreate, handleOfflineUpdateWallet, processOutboxSync, generateUUID, queuedWalletDeltas } from "@/lib/offlineSync";
 
 /** A wallet as the UI sees it: a server row or a queued offline one. */
 export type WalletRow = Tables<"wallets"> & { _isOfflinePending?: boolean };
@@ -58,6 +58,15 @@ export function useWallets() {
         for (const ow of outboxWallets) {
           if (ow.id && !existingIds.has(ow.id)) {
             combined.push(ow as unknown as (typeof combined)[number]);
+          }
+        }
+
+        // Keep balances from queued (not yet synced) transactions: the server can't include them yet.
+        const pendingDeltas = queuedWalletDeltas();
+        if (pendingDeltas.size > 0) {
+          for (let i = 0; i < combined.length; i++) {
+            const delta = pendingDeltas.get(combined[i].id);
+            if (delta) combined[i] = { ...combined[i], balance: Number(combined[i].balance) + delta };
           }
         }
 

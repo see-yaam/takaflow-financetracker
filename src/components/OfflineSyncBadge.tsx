@@ -1,9 +1,39 @@
+import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useOfflineSyncStatus, processOutboxSync, readStoredSessionUserId } from "@/lib/offlineSync";
 import { openSyncIssues } from "@/components/SyncIssuesDialog";
 import { WifiOff, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+/** How long the green "Synced" confirmation stays up after a sync pass that sent something. */
+export const SYNCED_FLASH_MS = 3000;
+
+const SYNCED_FADE_MS = 400;
+type SyncedFlash = "hidden" | "shown" | "fading";
+
+/** "shown" for a few seconds after a sync pass actually delivered queued changes, then "fading". */
+function useSyncedFlash(): SyncedFlash {
+  const [phase, setPhase] = useState<SyncedFlash>("hidden");
+  useEffect(() => {
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    const clearTimers = () => timers.splice(0).forEach(clearTimeout);
+    const onFinished = (e: Event) => {
+      const synced = Number((e as CustomEvent<{ syncedCount?: number }>).detail?.syncedCount) || 0;
+      if (synced <= 0) return;
+      clearTimers();
+      setPhase("shown");
+      timers.push(setTimeout(() => setPhase("fading"), SYNCED_FLASH_MS - SYNCED_FADE_MS));
+      timers.push(setTimeout(() => setPhase("hidden"), SYNCED_FLASH_MS));
+    };
+    window.addEventListener("takaflow_sync_finished", onFinished);
+    return () => {
+      clearTimers();
+      window.removeEventListener("takaflow_sync_finished", onFinished);
+    };
+  }, []);
+  return phase;
+}
 
 /**
  * Display-only sync status pill. It never deletes queued changes: tapping it
@@ -12,11 +42,13 @@ import { toast } from "sonner";
 export default function OfflineSyncBadge() {
   const qc = useQueryClient();
   const { isOnline, pendingCount, failedCount, isSyncing } = useOfflineSyncStatus();
+  const syncedFlash = useSyncedFlash();
 
-  // If online and nothing queued, don't clutter the screen
-  if (isOnline && pendingCount === 0 && failedCount === 0 && !isSyncing) {
+  // Online with nothing queued: briefly confirm a finished sync, otherwise stay out of the way.
+  if (isOnline && pendingCount === 0 && failedCount === 0 && !isSyncing && syncedFlash === "hidden") {
     return null;
   }
+  const showingSynced = isOnline && pendingCount === 0 && failedCount === 0 && !isSyncing;
 
   const handleClick = async () => {
     if (failedCount > 0) {
@@ -73,7 +105,8 @@ export default function OfflineSyncBadge() {
           ? "bg-primary/15 text-primary border border-primary/30 animate-pulse"
           : pendingCount > 0
           ? "bg-amber-500/15 text-amber-500 border border-amber-500/40 cursor-pointer hover:bg-amber-500/25 active:scale-95"
-          : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30"
+          : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 animate-in fade-in zoom-in-95",
+        showingSynced && syncedFlash === "fading" && "opacity-0 scale-95 duration-300"
       )}
       title={
         failedCount > 0
