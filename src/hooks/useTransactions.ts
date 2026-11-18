@@ -14,6 +14,7 @@ import {
   handleOfflineUpdateCategory,
   processOutboxSync,
   generateUUID,
+  wasRecentlySynced,
 } from "@/lib/offlineSync";
 import { toast } from "sonner";
 import { matchesTxFilters } from "@/lib/txFilters";
@@ -55,6 +56,9 @@ export function useTransactions(filters?: TransactionFilters) {
   return useQuery({
     queryKey,
     queryFn: async (): Promise<TransactionRow[]> => {
+      // Snapshot before the request: if one of these syncs while we wait, the
+      // response may predate its insert, and the outbox no longer has it.
+      const queuedAtStart = queuedRowsFor(filters);
       try {
         let query = supabase
           .from("transactions")
@@ -93,9 +97,14 @@ export function useTransactions(filters?: TransactionFilters) {
         }
 
         const outboxTxs = queuedRowsFor(filters);
+        const stillQueued = new Set(outboxTxs.map((r) => r.id));
+        // Synced mid-request and missing from this (older) response: keep it, no longer marked pending.
+        const justSynced = queuedAtStart
+          .filter((r) => !stillQueued.has(r.id) && !existingIds.has(r.id) && wasRecentlySynced(r.id))
+          .map((r) => ({ ...r, _isOfflinePending: false }));
 
         const combined = [...(data || [])];
-        for (const ot of outboxTxs) {
+        for (const ot of [...justSynced, ...outboxTxs]) {
           if (!existingIds.has(ot.id)) {
             // queued (not yet synced) rows share the row shape except the joined wallets(name)
             combined.unshift(ot as unknown as (typeof combined)[number]);

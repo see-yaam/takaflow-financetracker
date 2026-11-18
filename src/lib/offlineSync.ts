@@ -461,6 +461,24 @@ export function findQueuedCreate(entityId: string, type?: "CREATE_TRANSACTION" |
 
 let inFlightItemId: string | null = null;
 
+/**
+ * Transaction ids a sync pass delivered in the last minute. A list fetch that
+ * started before the insert can come back without the row after it has left
+ * the outbox; readers keep showing these rows until a fresh fetch includes them.
+ */
+const RECENTLY_SYNCED_MS = 60_000;
+const recentlySyncedTxIds = new Map<string, number>();
+
+export function wasRecentlySynced(txId: string): boolean {
+  const at = recentlySyncedTxIds.get(txId);
+  if (at === undefined) return false;
+  if (Date.now() - at > RECENTLY_SYNCED_MS) {
+    recentlySyncedTxIds.delete(txId);
+    return false;
+  }
+  return true;
+}
+
 /** True while processOutboxSync is sending this exact item to the server. */
 export function isInFlight(itemId: string): boolean {
   return inFlightItemId === itemId;
@@ -779,6 +797,7 @@ export function __resetSyncStateForTests(): void {
   lastSyncAttemptTime = 0;
   inFlightItemId = null;
   ownerOverride = undefined;
+  recentlySyncedTxIds.clear();
 }
 
 export function isSyncRunning(): boolean {
@@ -1041,6 +1060,10 @@ async function runSyncPass(queryClient: QueryClient, force: boolean): Promise<Sy
       inFlightItemId = null;
 
       if (outcome.kind === "ok") {
+        if (item.type === "CREATE_TRANSACTION") {
+          const txId = item.payload?.tempId || item.payload?.transaction?.id;
+          if (txId) recentlySyncedTxIds.set(txId, Date.now());
+        }
         removeFromOutbox(item.id);
         synced++;
         continue;

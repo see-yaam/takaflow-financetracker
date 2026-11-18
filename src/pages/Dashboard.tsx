@@ -28,6 +28,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import AddTransactionDrawer from "@/components/AddTransactionDrawer";
 import EditCategoryDialog from "@/components/EditCategoryDialog";
 import VoiceTransactionModal from "@/components/voice/VoiceTransactionModal";
@@ -63,7 +64,8 @@ export default function Dashboard() {
   const { streak } = useStreaks();
   const currentMonth = format(new Date(), "yyyy-MM");
 
-  const { data: transactions } = useTransactions({ month: currentMonth });
+  // isPending: nothing loaded yet for this month, so "no transactions" would be a guess.
+  const { data: transactions, isPending: txPending } = useTransactions({ month: currentMonth });
   const { data: budgetGoal } = useBudgetGoal(currentMonth);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [drawerType, setDrawerType] = useState<"income" | "expense">("expense");
@@ -417,7 +419,20 @@ export default function Dashboard() {
             </button>
           )}
         </div>
-        {!transactions?.length ? (
+        {txPending && !transactions ? (
+          <div className="space-y-3 py-1" aria-busy="true" aria-label="Loading transactions" data-testid="recent-tx-loading">
+            {[0, 1, 2].map((i) => (
+              <div key={i} className="flex items-center gap-3">
+                <Skeleton className="h-8 w-8 sm:h-9 sm:w-9 rounded-xl shrink-0" />
+                <div className="flex-1 min-w-0 space-y-1.5">
+                  <Skeleton className="h-3.5 w-2/5" />
+                  <Skeleton className="h-3 w-3/5" />
+                </div>
+                <Skeleton className="h-4 w-16 shrink-0" />
+              </div>
+            ))}
+          </div>
+        ) : !transactions?.length ? (
           <p className="text-sm text-muted-foreground py-3">No transactions yet. Start tracking your spending.</p>
         ) : (
           <div className="space-y-0">
