@@ -63,6 +63,21 @@
     -webkit-tap-highlight-color: transparent;
   }
 
+  /*
+   * Nothing may widen the page past the screen (that is what made the app
+   * wobble sideways while scrolling). `clip` instead of `hidden`: `hidden`
+   * turns these elements into scroll containers, which breaks the sticky
+   * mobile header and lets the browser scroll them sideways programmatically.
+   * Browsers without `clip` ignore the line and keep today's behaviour.
+   */
+  html,
+  body,
+  #root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
   /* Globally hide all native scrollbars across mobile, tablet, and desktop for native app look */
   html,
   body,

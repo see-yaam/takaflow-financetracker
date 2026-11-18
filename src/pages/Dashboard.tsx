@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import type { TransactionRow } from "@/hooks/useTransactions";
 import { useNavigate } from "react-router-dom";
 import { useWallets } from "@/hooks/useWallets";
@@ -113,6 +113,16 @@ export default function Dashboard() {
 
   const displayWallets = wallets || [];
 
+  // Scroll-snap re-snaps to whichever card was snapped before a layout change.
+  // While wallets load only the "Add Wallet" card exists, so once the wallets
+  // arrive in front of it the carousel jumped to its far end, hiding the first
+  // wallet. Start from the first card whenever the number of cards changes.
+  const walletCarouselRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const el = walletCarouselRef.current;
+    if (el) el.scrollLeft = 0;
+  }, [displayWallets.length]);
+
   const totalBalance = displayWallets.reduce((s, w) => {
     const currency = w.currency || "BDT";
     return s + convertToBDT(Number(w.balance), currency, rates);
@@ -140,7 +150,7 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="space-y-6 min-w-0 max-w-full overflow-x-hidden">
+    <div className="space-y-6 w-full min-w-0 max-w-full overflow-x-clip">
       {/* Hero balance */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -148,11 +158,11 @@ export default function Dashboard() {
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
         {...peekHandlers}
         data-testid="balance-card"
-        className={cn("vault-card p-5 sm:p-8 relative overflow-hidden select-none", isPrivacyLocked && "cursor-pointer")}
+        className={cn("vault-card p-5 sm:p-8 relative overflow-hidden select-none min-w-0", isPrivacyLocked && "cursor-pointer")}
       >
-        <div className="currency-watermark -top-12 -right-12 rotate-[15deg] text-accent/[0.04]">৳</div>
-        <div className="flex items-center justify-between mb-2">
-          <p className="wallet-label">Total Balance</p>
+        <div className="currency-watermark -top-12 -right-12 rotate-[15deg] text-accent/[0.04]" aria-hidden="true">৳</div>
+        <div className="flex items-center justify-between gap-2 mb-2 min-w-0">
+          <p className="wallet-label truncate min-w-0">Total Balance</p>
           <button
             type="button"
             onClick={togglePrivacyLock}
@@ -160,7 +170,7 @@ export default function Dashboard() {
             aria-pressed={isPrivacyLocked}
             aria-label={isPrivacyLocked ? "Show balances" : "Hide balances"}
             className={cn(
-              "flex items-center gap-1 text-[11px] bg-secondary/80 px-2.5 py-1 rounded-full border border-border/40 active:scale-95 transition-transform",
+              "flex shrink-0 items-center gap-1 whitespace-nowrap text-[11px] bg-secondary/80 px-2.5 py-1 rounded-full border border-border/40 active:scale-95 transition-transform",
               isPrivacyLocked ? "text-muted-foreground" : "text-primary"
             )}
           >
@@ -177,7 +187,7 @@ export default function Dashboard() {
         </div>
         <h2
           className={cn(
-            "text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight tabular-nums transition-all duration-300",
+            "text-[1.75rem] min-[400px]:text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight tabular-nums break-words transition-all duration-300",
             totalBalance < 0 ? "text-destructive" : "text-foreground",
             isDisguised ? "filter blur-lg select-none opacity-40" : "filter blur-0 opacity-100"
           )}
@@ -191,32 +201,32 @@ export default function Dashboard() {
         <button
           type="button"
           onClick={() => openDrawer("income")}
-          className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 active:scale-95 transition-all text-emerald-400 font-semibold text-xs shadow-sm hover:bg-emerald-500/15"
+          className="flex flex-col items-center justify-center gap-1.5 py-3 px-1.5 min-w-0 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 active:scale-95 transition-all text-emerald-400 font-semibold text-xs shadow-sm hover:bg-emerald-500/15"
         >
           <span className="h-8 w-8 rounded-full bg-emerald-500/20 flex items-center justify-center text-emerald-400">
             <Plus className="h-4 w-4" />
           </span>
-          <span>+ Income</span>
+          <span className="max-w-full truncate">+ Income</span>
         </button>
         <button
           type="button"
           onClick={() => openDrawer("expense")}
-          className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl bg-rose-500/10 border border-rose-500/20 active:scale-95 transition-all text-rose-400 font-semibold text-xs shadow-sm hover:bg-rose-500/15"
+          className="flex flex-col items-center justify-center gap-1.5 py-3 px-1.5 min-w-0 rounded-2xl bg-rose-500/10 border border-rose-500/20 active:scale-95 transition-all text-rose-400 font-semibold text-xs shadow-sm hover:bg-rose-500/15"
         >
           <span className="h-8 w-8 rounded-full bg-rose-500/20 flex items-center justify-center text-rose-400">
             <TrendingDown className="h-4 w-4" />
           </span>
-          <span>- Expense</span>
+          <span className="max-w-full truncate">- Expense</span>
         </button>
         <button
           type="button"
           onClick={() => setVoiceOpen(true)}
-          className="flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-2xl bg-primary/10 border border-primary/25 active:scale-95 transition-all text-primary font-semibold text-xs shadow-sm hover:bg-primary/15"
+          className="flex flex-col items-center justify-center gap-1.5 py-3 px-1.5 min-w-0 rounded-2xl bg-primary/10 border border-primary/25 active:scale-95 transition-all text-primary font-semibold text-xs shadow-sm hover:bg-primary/15"
         >
           <span className="h-8 w-8 rounded-full bg-primary/20 flex items-center justify-center text-primary">
             <Mic className="h-4 w-4" />
           </span>
-          <span>Voice Add</span>
+          <span className="max-w-full truncate">Voice Add</span>
         </button>
       </div>
 
@@ -235,7 +245,7 @@ export default function Dashboard() {
       </div>
 
       {/* Wallet cards: Horizontal Carousel on mobile, Grid on desktop */}
-      <div className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-3 overflow-x-auto sm:overflow-visible pb-2 sm:pb-0 pt-1 -mx-4 px-4 sm:mx-0 sm:px-0 snap-x snap-mandatory no-scrollbar">
+      <div ref={walletCarouselRef} className="flex sm:grid sm:grid-cols-2 lg:grid-cols-3 gap-3 w-full min-w-0 max-w-full overflow-x-auto overscroll-x-contain sm:overflow-visible pb-2 sm:pb-0 pt-1 snap-x snap-mandatory no-scrollbar">
         {displayWallets.map((w, i) => {
           const Icon = iconMap[w.icon || "wallet"] || Wallet;
           const currency = w.currency || "BDT";
@@ -248,24 +258,24 @@ export default function Dashboard() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05, duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
               {...peekHandlers}
-              className="vault-card p-4 sm:p-5 relative overflow-hidden select-none cursor-pointer w-[65vw] min-w-[210px] max-w-[260px] sm:w-auto sm:min-w-0 sm:max-w-none shrink-0 snap-start transition-transform active:scale-[0.98]"
+              className="vault-card p-4 sm:p-5 relative overflow-hidden select-none cursor-pointer w-[62vw] min-w-[180px] max-w-[240px] sm:w-auto sm:min-w-0 sm:max-w-none shrink-0 snap-start transition-transform active:scale-[0.98]"
             >
               <div className="absolute top-1 right-2 text-foreground/[0.04] text-5xl font-bold pointer-events-none select-none">৳</div>
               <div className="flex items-center gap-2 mb-2">
                 <Icon className="h-4 w-4 text-accent shrink-0" />
-                <span className="wallet-label truncate">{w.name}</span>
+                <span className="wallet-label truncate min-w-0">{w.name}</span>
                 {currency !== "BDT" && (
-                  <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground ml-auto">{currency}</span>
+                  <span className="text-[10px] bg-muted px-1.5 py-0.5 rounded text-muted-foreground ml-auto shrink-0">{currency}</span>
                 )}
                 {isNegative && (
-                  <span className="text-[10px] bg-destructive/15 text-destructive border border-destructive/25 px-1.5 py-0.2 rounded font-semibold ml-auto">
+                  <span className="text-[10px] bg-destructive/15 text-destructive border border-destructive/25 px-1.5 py-0.2 rounded font-semibold ml-auto shrink-0">
                     Overdrawn
                   </span>
                 )}
               </div>
               <p
                 className={cn(
-                  "text-xl sm:text-2xl font-bold tracking-tight tabular-nums transition-all duration-300",
+                  "text-lg min-[400px]:text-xl sm:text-2xl font-bold tracking-tight tabular-nums break-words transition-all duration-300",
                   isNegative ? "text-destructive" : "text-foreground",
                   isDisguised ? "filter blur-md select-none opacity-40" : "filter blur-0 opacity-100"
                 )}
@@ -290,7 +300,7 @@ export default function Dashboard() {
         <button
           type="button"
           onClick={() => navigate("/settings")}
-          className="vault-card p-4 sm:p-5 flex flex-col items-center justify-center text-center border-dashed border-border/80 hover:border-primary/50 text-muted-foreground hover:text-primary transition-all w-[45vw] min-w-[150px] max-w-[180px] sm:w-auto sm:min-w-0 sm:max-w-none shrink-0 snap-start active:scale-95"
+          className="vault-card p-4 sm:p-5 flex flex-col items-center justify-center text-center border-dashed border-border/80 hover:border-primary/50 text-muted-foreground hover:text-primary transition-all w-[40vw] min-w-[140px] max-w-[180px] sm:w-auto sm:min-w-0 sm:max-w-none shrink-0 snap-start active:scale-95"
         >
           <div className="h-9 w-9 rounded-full bg-primary/10 text-primary flex items-center justify-center mb-1.5">
             <Plus className="h-5 w-5" />
@@ -306,7 +316,7 @@ export default function Dashboard() {
         const lentRemaining = debts.filter((d) => d.type === "lent" && !d.settled).reduce((s: number, d) => s + Number(d.remaining_amount), 0);
         return (
           <button onClick={() => navigate("/debts")} className="vault-card p-4 w-full text-left hover:bg-card/80 transition-colors">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               {borrowedRemaining > 0 && (
                 <span className="text-sm text-destructive font-medium tabular-nums">You owe: ৳{borrowedRemaining.toLocaleString()}</span>
               )}
@@ -420,9 +430,9 @@ export default function Dashboard() {
                       {t.type === "income" ? "+" : "-"}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <p className={`text-sm font-medium text-foreground truncate ${isReversed ? "line-through" : ""}`}>
-                        {t.category}
-                        {isReversed && <span className="ml-1.5 text-[10px] bg-destructive/15 text-destructive px-1.5 py-0.2 rounded no-underline inline-block">Reversed</span>}
+                      <p className="flex items-center gap-1.5 min-w-0 text-sm font-medium text-foreground">
+                        <span className={cn("truncate", isReversed && "line-through")}>{t.category}</span>
+                        {isReversed && <span className="shrink-0 text-[10px] bg-destructive/15 text-destructive px-1.5 py-0.2 rounded">Reversed</span>}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">{t.note || t.wallets?.name} · {format(new Date(t.date), "MMM d")}</p>
                     </div>

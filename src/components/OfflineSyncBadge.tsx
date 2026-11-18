@@ -39,8 +39,18 @@ function useSyncedFlash(): SyncedFlash {
  * Display-only sync status pill. It never deletes queued changes: tapping it
  * either forces a sync or opens the Sync Issues dialog for failed items.
  */
-export default function OfflineSyncBadge() {
+export default function OfflineSyncBadge({ compact = false }: {
+  /**
+   * Narrow phone header: long words become screen-reader-only so the pill
+   * stays icon + count and can't push the header wider than the screen.
+   */
+  compact?: boolean;
+} = {}) {
   const qc = useQueryClient();
+  const long = compact ? "sr-only" : undefined;
+  // Same text as before when not compact; compact keeps the word for screen readers only.
+  const withWord = (n: number, word: string) =>
+    compact ? <>{n}<span className="sr-only"> {word}</span></> : `${n} ${word}`;
   const { isOnline, pendingCount, failedCount, isSyncing } = useOfflineSyncStatus();
   const syncedFlash = useSyncedFlash();
 
@@ -96,7 +106,8 @@ export default function OfflineSyncBadge() {
       type="button"
       onClick={handleClick}
       className={cn(
-        "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-medium transition-all shadow-sm select-none",
+        "inline-flex shrink-0 items-center whitespace-nowrap py-1 rounded-full text-[11px] font-medium transition-all shadow-sm select-none",
+        compact ? "gap-1 px-2" : "gap-1.5 px-2.5",
         failedCount > 0
           ? "bg-destructive/15 text-destructive border border-destructive/40 cursor-pointer hover:bg-destructive/25 active:scale-95"
           : !isOnline
@@ -123,27 +134,27 @@ export default function OfflineSyncBadge() {
       {failedCount > 0 ? (
         <>
           <AlertTriangle className="h-3 w-3 shrink-0" />
-          <span className="font-semibold">{failedCount} need attention</span>
+          <span className="font-semibold">{withWord(failedCount, "need attention")}</span>
           {pendingCount > 0 && (
             <span className="ml-0.5 px-1.5 rounded-full bg-amber-500/20 text-amber-500 font-bold text-[10px]">
-              {pendingCount} pending
+              {withWord(pendingCount, "pending")}
             </span>
           )}
         </>
       ) : !isOnline ? (
         <>
           <WifiOff className="h-3 w-3 shrink-0" />
-          <span>Offline</span>
+          <span className={long}>Offline</span>
           {pendingCount > 0 && (
             <span className="ml-0.5 px-1.5 rounded-full bg-amber-500/20 font-bold text-[10px]">
-              {pendingCount} pending
+              {withWord(pendingCount, "pending")}
             </span>
           )}
         </>
       ) : isSyncing ? (
         <>
           <RefreshCw className="h-3 w-3 shrink-0 animate-spin" />
-          <span>Syncing...</span>
+          <span className={long}>Syncing...</span>
           {pendingCount > 0 && (
             <span className="ml-0.5 px-1.5 rounded-full bg-primary/20 font-bold text-[10px]">{pendingCount}</span>
           )}
@@ -151,7 +162,7 @@ export default function OfflineSyncBadge() {
       ) : pendingCount > 0 ? (
         <>
           <RefreshCw className="h-3 w-3 shrink-0 text-amber-500" />
-          <span className="font-semibold text-amber-500">{pendingCount} pending</span>
+          <span className="font-semibold text-amber-500">{withWord(pendingCount, "pending")}</span>
         </>
       ) : (
         <>

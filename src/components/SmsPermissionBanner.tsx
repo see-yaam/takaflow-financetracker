@@ -32,9 +32,9 @@ export default function SmsPermissionBanner() {
   };
 
   return (
-    <div className="mx-4 mt-3 md:mx-8 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 flex flex-wrap items-start gap-2 text-xs min-w-0">
+    <div className="w-full max-w-full min-w-0 mb-4 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 flex flex-wrap items-start gap-2 text-xs">
       <MessageSquareWarning className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-      <div className="flex-1 min-w-[12rem]">
+      <div className="flex-1 min-w-[10rem] break-words">
         <p className="font-medium text-foreground">Allow SMS so bank & bKash/Nagad alerts are captured automatically</p>
         <p className="text-muted-foreground">Without it, only notifications are tracked and some SMS can be missed.</p>
       </div>
