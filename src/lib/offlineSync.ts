@@ -899,8 +899,17 @@ function emptyResult(skipped?: SyncResult["skipped"]): SyncResult {
   return { synced: 0, newlyFailed: 0, ...getOutboxStats(), ...(skipped ? { skipped } : {}) };
 }
 
-function isDue(item: OutboxItem, now: number, force: boolean): boolean {
+function isDue(item: OutboxItem, now: number, force: boolean, all: OutboxItem[]): boolean {
   if (item.status === "failed") return false;
+  if (!force && item.blockedBy) {
+    // Waiting on another queued change (e.g. its new wallet). While that one is
+    // backing off or failed, this can't go anywhere: don't let it start passes,
+    // or the badge spins "Syncing" every tick for nothing.
+    const blocker = all.find((i) => i.id === item.blockedBy);
+    if (blocker && (blocker.status === "failed" || (blocker.nextAttemptAt !== undefined && blocker.nextAttemptAt > now))) {
+      return false;
+    }
+  }
   return force || !item.nextAttemptAt || item.nextAttemptAt <= now;
 }
 
@@ -931,7 +940,8 @@ export async function processOutboxSync(
   if (!force && now < authWaitUntil) return emptyResult("auth-wait");
   if (typeof navigator !== "undefined" && !navigator.onLine) return emptyResult("offline");
   reviveNetworkFailedItems();
-  if (!getOutbox().some((i) => isDue(i, now, force))) return emptyResult("empty");
+  const queue = getOutbox();
+  if (!queue.some((i) => isDue(i, now, force, queue))) return emptyResult("empty");
 
   inflight = runSyncPass(queryClient, force);
   try {
@@ -1137,8 +1147,9 @@ async function runSyncPass(queryClient: QueryClient, force: boolean): Promise<Sy
     }
 
     const startedAt = Date.now();
-    const order = getOutboxFor(uid)
-      .filter((i) => isDue(i, startedAt, force))
+    const mine = getOutboxFor(uid);
+    const order = mine
+      .filter((i) => isDue(i, startedAt, force, mine))
       .sort((a, b) => rank(a.type) - rank(b.type) || a.createdAt - b.createdAt)
       .map((i) => i.id);
 
