@@ -5,7 +5,7 @@ import type { Tables } from "@/integrations/supabase/types";
 import { throwIfSupabaseError } from "@/lib/supabaseErrors";
 import { walletCreateSchema, walletUpdateSchema } from "@/lib/validations";
 
-import { handleOfflineCreateWallet, handleOfflineDeleteWallet, isNetworkError, getOutbox, removeFromOutbox, findQueuedCreate, handleOfflineUpdateWallet, processOutboxSync, generateUUID, queuedWalletDeltas } from "@/lib/offlineSync";
+import { handleOfflineCreateWallet, handleOfflineDeleteWallet, isNetworkError, getOutbox, removeFromOutbox, findQueuedCreate, handleOfflineUpdateWallet, processOutboxSync, generateUUID, queuedWalletDeltas, readPersistedQueryData } from "@/lib/offlineSync";
 
 /** A wallet as the UI sees it: a server row or a queued offline one. */
 export type WalletRow = Tables<"wallets"> & { _isOfflinePending?: boolean };
@@ -18,6 +18,19 @@ function mergeQueuedWallets(cached: unknown): WalletRow[] {
     .filter((i) => i.type === "CREATE_WALLET" && i.payload.wallet && !ids.has(i.payload.tempId as string))
     .map((i) => ({ ...i.payload.wallet, id: i.payload.tempId as string, _isOfflinePending: true }));
   return [...base, ...queued] as unknown as WalletRow[];
+}
+
+/**
+ * Couldn't reach the server: show the last known wallets (memory, else the copy
+ * saved on disk) plus queued ones. With no known list, report the error rather
+ * than claim "no wallets": that showed ৳0.00 and got saved as if it were true.
+ * An empty list doesn't count as known: every signed-in account gets a
+ * "Main Vault" on first load, so [] here can only be a leftover of that bug.
+ */
+function offlineWallets(err: unknown, memory: unknown, queryKey: readonly unknown[]): WalletRow[] {
+  const known = [memory, readPersistedQueryData(queryKey)].find((d) => Array.isArray(d) && d.length > 0);
+  if (!known) throw err;
+  return mergeQueuedWallets(known);
 }
 
 export function useWallets() {
@@ -35,7 +48,7 @@ export function useWallets() {
         if (error) {
           if (isNetworkError(error)) {
             console.warn("Network error fetching wallets, using offline outbox fallback");
-            return mergeQueuedWallets(qc.getQueryData(["wallets", user?.id]));
+            return offlineWallets(error, qc.getQueryData(["wallets", user?.id]), ["wallets", user?.id]);
           }
           throwIfSupabaseError(error);
         }
@@ -98,7 +111,7 @@ export function useWallets() {
       } catch (err) {
         if (isNetworkError(err)) {
           console.warn("Network exception fetching wallets, using offline outbox fallback");
-          return mergeQueuedWallets(qc.getQueryData(["wallets", user?.id]));
+          return offlineWallets(err, qc.getQueryData(["wallets", user?.id]), ["wallets", user?.id]);
         }
         throw err;
       }

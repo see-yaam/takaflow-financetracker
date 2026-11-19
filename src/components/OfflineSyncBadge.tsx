@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useOfflineSyncStatus, processOutboxSync, readStoredSessionUserId, describeSyncWait } from "@/lib/offlineSync";
+import { useOfflineSyncStatus, processOutboxSync, readStoredSessionUserId, describeSyncWait, resetNetworkBackoff } from "@/lib/offlineSync";
 import { openSyncIssues } from "@/components/SyncIssuesDialog";
 import { WifiOff, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -92,6 +92,7 @@ export default function OfflineSyncBadge({ compact = false }: {
     }
 
     toast.loading("Syncing with cloud...", { id: "offline_sync_toast" });
+    resetNetworkBackoff(); // a manual "sync now" starts the retry schedule over
     const result = await processOutboxSync(qc, { force: true });
     if (result.synced > 0) {
       toast.dismiss("offline_sync_toast"); // processOutboxSync already shows the success toast

@@ -480,6 +480,24 @@ export function discardOwnerOutbox(uid: string): void {
 }
 
 /** Moves failed items back to pending so the next (forced) sync retries them. */
+/**
+ * The user asked to sync now: forget the network backoff on pending items so
+ * that, if this attempt also fails, automatic retries restart at 5s instead of
+ * continuing at up to 5 minutes.
+ */
+export function resetNetworkBackoff(): void {
+  const items = readAll();
+  let changed = false;
+  for (const item of items) {
+    if (item.status !== "failed" && (item.networkFailures || item.nextAttemptAt)) {
+      delete item.networkFailures;
+      delete item.nextAttemptAt;
+      changed = true;
+    }
+  }
+  if (changed) writeAll(items);
+}
+
 export function retryOutboxItems(ids: string[]): void {
   const retry = new Set(ids);
   const items = readAll();
@@ -543,6 +561,25 @@ export function clearOfflineCache(): void {
     }
   } catch (err) {
     console.error("Error clearing offline cache:", err);
+  }
+}
+
+/**
+ * The last successfully loaded data for exactly this query key, from the cache
+ * saved on disk (used when the in-memory copy is missing). Exact key match only,
+ * so another account's data on the same device is never picked up.
+ */
+export function readPersistedQueryData<T = unknown>(queryKey: readonly unknown[]): T | undefined {
+  const storage = getStorage();
+  if (!storage) return undefined;
+  try {
+    const parsed = JSON.parse(storage.getItem(CACHE_STORAGE_KEY) || "null");
+    const queries: Array<{ queryKey?: unknown; state?: { data?: unknown } }> = parsed?.clientState?.queries ?? [];
+    const wanted = JSON.stringify(queryKey);
+    const hit = queries.find((q) => JSON.stringify(q.queryKey) === wanted);
+    return hit?.state?.data as T | undefined;
+  } catch {
+    return undefined; // corrupt cache: behave as if there is none
   }
 }
 
@@ -1008,7 +1045,16 @@ async function syncOne(item: OutboxItem, ctx: SyncContext): Promise<ItemOutcome>
       case "CREATE_WALLET": {
         const source = item.payload.wallet;
         if (!source) return { kind: "error", cls: "permanent", error: new Error("Malformed wallet item") };
-        const wallet = { ...source, user_id: source.user_id || ctx.uid };
+        // Only real columns: older queued items may carry UI-only fields (e.g. _isOfflinePending),
+        // which PostgREST would reject as unknown columns.
+        const wallet: OutboxWalletPayload = {
+          id: source.id,
+          name: source.name,
+          balance: source.balance,
+          icon: source.icon,
+          currency: source.currency,
+          user_id: source.user_id || ctx.uid,
+        };
         if (!wallet.id || wallet.id.startsWith("offline_")) wallet.id = generateUUID();
         const res = await withTimeout(supabase.from("wallets").insert(wallet), 20000);
         const outcome = failureFromResponse(res, true);

@@ -157,6 +157,13 @@ export function useCreateTransaction() {
         return handleOfflineCreateTransaction(parsed, resolvedUserId, qc);
       }
 
+      // Its wallet hasn't reached the server yet (e.g. created offline): the server would
+      // reject this with a foreign-key error. Queue it; sync sends the wallet first.
+      const walletStillQueued = () => !!findQueuedCreate(parsed.wallet_id, "CREATE_WALLET");
+      if (walletStillQueued()) {
+        return handleOfflineCreateTransaction(parsed, resolvedUserId, qc);
+      }
+
       // Try online insert first, with immediate optimistic offline fallback if network is unreachable
       try {
         const txId = generateUUID();
@@ -168,6 +175,11 @@ export function useCreateTransaction() {
 
         if (error) {
           if (isNetworkError(error)) {
+            return handleOfflineCreateTransaction(parsed, resolvedUserId, qc);
+          }
+          // 23503 = wallet not on the server. Still queued (it raced us): queue this too.
+          // Not queued: the wallet really is gone, so report it.
+          if ((error as { code?: string }).code === "23503" && walletStillQueued()) {
             return handleOfflineCreateTransaction(parsed, resolvedUserId, qc);
           }
           throwIfSupabaseError(error);
