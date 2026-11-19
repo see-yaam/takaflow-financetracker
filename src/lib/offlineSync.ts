@@ -99,6 +99,8 @@ export interface OutboxItem {
   failedAt?: number;
   nextAttemptAt?: number;
   blockedBy?: string;
+  /** Times the server could not be reached (offline, dropped connection, session not ready). Only drives backoff; never fails the item. */
+  networkFailures?: number;
 }
 
 export interface OutboxStats {
@@ -197,7 +199,14 @@ export function classifySyncError(error: unknown, status?: number): SyncErrorCla
   const httpStatus = typeof status === "number" ? status : typeof e.status === "number" ? e.status : undefined;
 
   if (code === "23505") return "ok-exists";
-  if (code === "PGRST301" || httpStatus === 401 || msg.includes("jwt expired") || msg.includes("invalid jwt")) {
+  if (
+    code === "PGRST301" ||
+    httpStatus === 401 ||
+    msg.includes("jwt expired") ||
+    msg.includes("invalid jwt") ||
+    // sessionGuardFetch: the write was held back because the token is still refreshing.
+    msg.includes("session is not ready")
+  ) {
     return "auth";
   }
   if (isNetworkError(error)) return "transient";
@@ -213,6 +222,43 @@ export function classifySyncError(error: unknown, status?: number): SyncErrorCla
 export function nextBackoffMs(attempts: number): number {
   const n = Math.max(1, attempts);
   return Math.min(5000 * 2 ** (n - 1), 5 * 60 * 1000);
+}
+
+const NETWORK_BACKOFF_MS = [5_000, 15_000, 30_000, 60_000, 120_000, 300_000];
+
+/** Backoff while the server can't be reached: 5s, 15s, 30s, 1m, 2m, then every 5 minutes. Never gives up. */
+export function networkBackoffMs(failures: number): number {
+  return NETWORK_BACKOFF_MS[Math.min(Math.max(1, failures), NETWORK_BACKOFF_MS.length) - 1];
+}
+
+/** The server was never reached (no HTTP response), as opposed to answering with an error. */
+function isUnreachable(error: unknown, status?: number): boolean {
+  return (status === undefined || status === 0) && isNetworkError(error);
+}
+
+/**
+ * Before v1.1.7 a flaky connection could exhaust MAX_TRANSIENT_ATTEMPTS and mark
+ * an item "failed" ("Server kept failing after 10 attempts: TypeError: Failed to
+ * fetch") although the server never saw it. Those go back to pending.
+ */
+const STUCK_ON_NETWORK = /^Server kept failing after \d+ attempts: .*(failed to fetch|network ?error|load failed|connection refused|net::err|timed? ?out|aborterror|session is not ready)/i;
+
+export function reviveNetworkFailedItems(): number {
+  const items = readAll();
+  let revived = 0;
+  for (const item of items) {
+    if (item.status === "failed" && STUCK_ON_NETWORK.test(item.lastError || "")) {
+      item.status = "pending";
+      item.attempts = 0;
+      delete item.failedAt;
+      delete item.nextAttemptAt;
+      delete item.lastError;
+      delete item.lastErrorCode;
+      revived++;
+    }
+  }
+  if (revived) writeAll(items);
+  return revived;
 }
 
 // ---------------------------------------------------------------------------
@@ -442,8 +488,12 @@ export function retryOutboxItems(ids: string[]): void {
     if (retry.has(item.id)) {
       item.status = "pending";
       item.attempts = 0;
+      delete item.networkFailures;
       delete item.nextAttemptAt;
       delete item.failedAt;
+      delete item.lastError;
+      delete item.lastErrorCode;
+      delete item.blockedBy;
       changed = true;
     }
   }
@@ -838,6 +888,7 @@ export async function processOutboxSync(
   lastSyncAttemptTime = now;
 
   if (typeof navigator !== "undefined" && !navigator.onLine) return emptyResult("offline");
+  reviveNetworkFailedItems();
   if (!getOutbox().some((i) => isDue(i, now, force))) return emptyResult("empty");
 
   inflight = runSyncPass(queryClient, force);
@@ -1101,7 +1152,20 @@ async function runSyncPass(queryClient: QueryClient, force: boolean): Promise<Sy
         break; // keep order; retry the whole queue with a fresh token next pass
       }
 
-      // transient
+      if (isUnreachable(outcome.error, outcome.status)) {
+        // Offline-first: the server never saw this change, so it can't have rejected it.
+        // Back off, keep it pending, and never count it toward MAX_TRANSIENT_ATTEMPTS.
+        const networkFailures = (item.networkFailures || 0) + 1;
+        updateOutboxItem(item.id, {
+          networkFailures,
+          lastError: message,
+          lastErrorCode: code,
+          nextAttemptAt: Date.now() + networkBackoffMs(networkFailures),
+        });
+        break; // can't reach the server: stop here to preserve ordering
+      }
+
+      // transient, but the server answered (408/429/5xx) or an unexpected error: bounded retries
       const attempts = (item.attempts || 0) + 1;
       const serverSide = typeof outcome.status === "number" && (outcome.status === 429 || outcome.status >= 500);
       if (attempts >= MAX_TRANSIENT_ATTEMPTS) {
@@ -1167,7 +1231,13 @@ export function useOutboxAutoSync(queryClient: QueryClient, userId: string | nul
       if (typeof document === "undefined" || document.visibilityState === "visible") maybeSync();
     };
 
-    window.addEventListener("online", maybeSync);
+    // Back online: sync now rather than waiting out the network backoff.
+    const handleOnline = () => {
+      if (getOutboxStats().pending > 0) {
+        processOutboxSync(queryClient, { force: true }).catch((err) => console.error("Auto sync failed:", err));
+      }
+    };
+    window.addEventListener("online", handleOnline);
     window.addEventListener("focus", handleVisible);
     document.addEventListener("visibilitychange", handleVisible);
     const timer = setInterval(maybeSync, 10000);
@@ -1176,7 +1246,7 @@ export function useOutboxAutoSync(queryClient: QueryClient, userId: string | nul
     maybeSync();
 
     return () => {
-      window.removeEventListener("online", maybeSync);
+      window.removeEventListener("online", handleOnline);
       window.removeEventListener("focus", handleVisible);
       document.removeEventListener("visibilitychange", handleVisible);
       clearInterval(timer);

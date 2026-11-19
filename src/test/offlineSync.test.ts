@@ -100,7 +100,7 @@ describe("processOutboxSync never drops data silently", () => {
     expect(getOutbox()).toHaveLength(0);
   });
 
-  it("keeps a network failure pending, counts the attempt once, and stops the pass", async () => {
+  it("keeps a network failure pending, backs off without counting an attempt, and stops the pass", async () => {
     queueTx(qc);
     queueTx(qc);
     supabaseMock.throwNext("transactions:insert", fetchFailure());
@@ -108,21 +108,22 @@ describe("processOutboxSync never drops data silently", () => {
     expect(res.synced).toBe(0);
     const items = getOutbox();
     expect(items).toHaveLength(2);
-    expect(items[0].attempts).toBe(1);
+    expect(items[0].attempts ?? 0).toBe(0);
+    expect(items[0].networkFailures).toBe(1);
     expect(items[0].status).toBe("pending");
     // pass stopped after the first failure: the second item was not attempted
     expect(supabaseMock.callsTo("transactions", "insert")).toHaveLength(1);
   });
 
-  it("survives many flaky passes and only then moves to failed (never deleted)", async () => {
+  it("survives any number of flaky passes and never moves to failed (or gets deleted)", async () => {
     queueTx(qc);
-    for (let i = 0; i < MAX_TRANSIENT_ATTEMPTS; i++) {
+    for (let i = 0; i < MAX_TRANSIENT_ATTEMPTS + 5; i++) {
       supabaseMock.throwNext("transactions:insert", fetchFailure());
       await sync(qc);
     }
     const [item] = getOutbox();
     expect(item).toBeDefined();
-    expect(item.status).toBe("failed");
+    expect(item.status).toBe("pending");
     expect(item.lastError).toMatch(/Failed to fetch/);
   });
 
