@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useOfflineSyncStatus, processOutboxSync, readStoredSessionUserId } from "@/lib/offlineSync";
+import { useOfflineSyncStatus, processOutboxSync, readStoredSessionUserId, describeSyncWait } from "@/lib/offlineSync";
 import { openSyncIssues } from "@/components/SyncIssuesDialog";
 import { WifiOff, RefreshCw, CheckCircle2, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -65,7 +65,16 @@ export default function OfflineSyncBadge({ compact = false }: {
       openSyncIssues();
       return;
     }
-    if (isSyncing || pendingCount === 0) return;
+    if (isSyncing) {
+      // Never a dead tap: say what the sync is waiting on.
+      toast.info(`Syncing ${pendingCount} ${pendingCount === 1 ? "change" : "changes"}…`, {
+        id: "offline_sync_toast",
+        description: describeSyncWait(),
+        duration: 5000,
+      });
+      return;
+    }
+    if (pendingCount === 0) return;
 
     if (!readStoredSessionUserId()) {
       toast.info("Please log in to your account to sync offline changes to cloud ☁️", {
@@ -113,7 +122,7 @@ export default function OfflineSyncBadge({ compact = false }: {
           : !isOnline
           ? "bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
           : isSyncing
-          ? "bg-primary/15 text-primary border border-primary/30 animate-pulse"
+          ? "bg-primary/15 text-primary border border-primary/30 animate-pulse cursor-pointer active:scale-95"
           : pendingCount > 0
           ? "bg-amber-500/15 text-amber-500 border border-amber-500/40 cursor-pointer hover:bg-amber-500/25 active:scale-95"
           : "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/30 animate-in fade-in zoom-in-95",
@@ -125,7 +134,7 @@ export default function OfflineSyncBadge({ compact = false }: {
           : !isOnline
           ? "Offline Mode: Showing local copy. New changes will sync when online."
           : isSyncing
-          ? "Syncing local changes with cloud database..."
+          ? "Syncing local changes with cloud database. Tap for details."
           : pendingCount > 0
           ? "Tap to sync offline changes now"
           : "All local changes synced"
