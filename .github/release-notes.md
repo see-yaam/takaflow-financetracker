@@ -1,4 +1,4 @@
-<!-- release-notes-for: 1.1.6 -->
+<!-- release-notes-for: 1.1.7 -->
 <!-- One "- **Title**: description" line per change. The in-app updater shows each as a card. Update the marker above to the new versionName in every release PR. -->
-- **🔄 Transactions stay put while syncing**: Your transactions, wallets and balances no longer vanish while the app syncs or reconnects.
-- **⏳ No more false "No transactions yet"**: While your list loads, you see placeholders instead of an empty message.
+- **📶 No false "Sync issues"**: A weak or dropped connection no longer marks your offline changes as rejected. They wait and sync as soon as you're back online.
+- **🔁 Stuck changes recover by themselves**: Changes that earlier versions wrongly marked as failed are retried automatically after this update.
