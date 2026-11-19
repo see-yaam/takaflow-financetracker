@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { render, screen, act } from "@testing-library/react";
+import { render, screen, act, fireEvent } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 vi.mock("@/integrations/supabase/client", async () => {
@@ -9,7 +9,8 @@ vi.mock("@/integrations/supabase/client", async () => {
 vi.mock("sonner", () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn(), loading: vi.fn(), dismiss: vi.fn() } }));
 
 import { setOnline } from "./helpers";
-import { __resetSyncStateForTests, setOutboxOwner } from "@/lib/offlineSync";
+import { __resetSyncStateForTests, setOutboxOwner, handleOfflineCreateTransaction } from "@/lib/offlineSync";
+import { toast } from "sonner";
 import OfflineSyncBadge, { SYNCED_FLASH_MS } from "@/components/OfflineSyncBadge";
 
 function renderBadge(props: { compact?: boolean } = {}) {
@@ -85,5 +86,25 @@ describe("OfflineSyncBadge compact (phone header)", () => {
     setOnline(false);
     renderBadge();
     expect(screen.getByText("Offline")).not.toHaveClass("sr-only");
+  });
+});
+
+describe("OfflineSyncBadge while syncing", () => {
+  it("a tap explains what the sync is waiting on instead of doing nothing", () => {
+    handleOfflineCreateTransaction(
+      { wallet_id: "11111111-1111-4111-8111-111111111111", type: "expense", amount: 5, category: "Food", date: "2026-11-10" },
+      "user-a",
+      new QueryClient(),
+      { skipSync: true }
+    );
+    renderBadge();
+    act(() => {
+      window.dispatchEvent(new CustomEvent("takaflow_sync_started"));
+    });
+    fireEvent.click(screen.getByRole("button"));
+    expect(toast.info).toHaveBeenCalledWith(
+      "Syncing 1 change…",
+      expect.objectContaining({ description: expect.stringMatching(/\w/) })
+    );
   });
 });

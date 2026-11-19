@@ -112,7 +112,7 @@ export interface OutboxStats {
 export interface SyncResult extends OutboxStats {
   synced: number;
   newlyFailed: number;
-  skipped?: "offline" | "no-session" | "throttled" | "empty";
+  skipped?: "offline" | "no-session" | "throttled" | "empty" | "auth-wait";
 }
 
 type CachedTx = Partial<OutboxTransactionPayload> & {
@@ -839,6 +839,46 @@ function withTimeout<T>(promise: PromiseLike<T>, ms = 10000): Promise<T> {
 // ---------------------------------------------------------------------------
 let inflight: Promise<SyncResult> | null = null;
 let lastSyncAttemptTime = 0;
+
+/**
+ * Sync-wide pause while the session can't be refreshed. Without it, every 10s
+ * tick started a new pass that stopped on the same auth problem, so the badge
+ * looked stuck on "Syncing". Forced passes (back online, Retry, badge tap) ignore it.
+ */
+let authWaitUntil = 0;
+let authPauses = 0;
+
+function pauseForAuth(): void {
+  authPauses++;
+  authWaitUntil = Date.now() + networkBackoffMs(authPauses);
+}
+
+function clearAuthPause(): void {
+  authPauses = 0;
+  authWaitUntil = 0;
+}
+
+/** When automatic syncing will resume after an auth pause (0 when not paused). */
+export function getAuthWaitUntil(): number {
+  return authWaitUntil > Date.now() ? authWaitUntil : 0;
+}
+
+/** Plain-language reason queued changes haven't gone out yet, for the sync badge. */
+export function describeSyncWait(): string {
+  if (getAuthWaitUntil()) return "Waiting to refresh your sign-in. It will retry automatically.";
+  const pending = getOutbox().filter((i) => i.status !== "failed");
+  if (pending.some((i) => i.blockedBy)) {
+    const unblocked = pending.filter((i) => !i.blockedBy);
+    if (unblocked.length === 0) return "Waiting for a new wallet to sync first.";
+  }
+  const withError = pending.find((i) => i.lastError);
+  if (withError) {
+    const cls = classifySyncError({ message: withError.lastError, code: "" });
+    if (cls === "auth") return "Waiting to refresh your sign-in. It will retry automatically.";
+    if (withError.networkFailures) return "Can't reach the server right now. Your changes are saved on this device.";
+  }
+  return "Sending your offline changes to the cloud.";
+}
 const MIN_SYNC_INTERVAL_MS = 2000;
 
 /** Test-only: resets module-level sync state between tests. */
@@ -848,6 +888,7 @@ export function __resetSyncStateForTests(): void {
   inFlightItemId = null;
   ownerOverride = undefined;
   recentlySyncedTxIds.clear();
+  clearAuthPause();
 }
 
 export function isSyncRunning(): boolean {
@@ -887,6 +928,7 @@ export async function processOutboxSync(
   }
   lastSyncAttemptTime = now;
 
+  if (!force && now < authWaitUntil) return emptyResult("auth-wait");
   if (typeof navigator !== "undefined" && !navigator.onLine) return emptyResult("offline");
   reviveNetworkFailedItems();
   if (!getOutbox().some((i) => isDue(i, now, force))) return emptyResult("empty");
@@ -1079,6 +1121,7 @@ async function runSyncPass(queryClient: QueryClient, force: boolean): Promise<Sy
     if (!uid) {
       // RLS would reject everything; keep the queue intact until the user signs in.
       skipped = "no-session";
+      pauseForAuth();
       return { synced, newlyFailed, ...getOutboxStats(), skipped };
     }
 
@@ -1111,6 +1154,7 @@ async function runSyncPass(queryClient: QueryClient, force: boolean): Promise<Sy
       inFlightItemId = null;
 
       if (outcome.kind === "ok") {
+        clearAuthPause();
         if (item.type === "CREATE_TRANSACTION") {
           const txId = item.payload?.tempId || item.payload?.transaction?.id;
           if (txId) recentlySyncedTxIds.set(txId, Date.now());
@@ -1143,11 +1187,16 @@ async function runSyncPass(queryClient: QueryClient, force: boolean): Promise<Sy
         updateOutboxItem(item.id, { lastError: message, lastErrorCode: code });
         if (!refreshedSession) {
           refreshedSession = true;
+          let refreshed = false;
           try {
-            await withTimeout(supabase.auth.refreshSession(), 10000);
+            // refreshSession() reports failure in its result; it does not throw.
+            const { data } = await withTimeout(supabase.auth.refreshSession(), 10000);
+            refreshed = !!data?.session;
           } catch {
-            // still signed out / offline: try again next pass
+            // timed out / offline
           }
+          if (refreshed) clearAuthPause(); // fresh token: the next pass can retry right away
+          else pauseForAuth();
         }
         break; // keep order; retry the whole queue with a fresh token next pass
       }

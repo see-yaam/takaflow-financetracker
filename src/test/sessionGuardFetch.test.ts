@@ -7,7 +7,7 @@ vi.mock("@/integrations/supabase/client", async () => {
   return { supabase: m.supabaseMock.client };
 });
 
-import { createSessionGuardFetch, hasStoredUserSession, SESSION_NOT_READY_MESSAGE } from "@/lib/sessionGuardFetch";
+import { canSilentlyNoOp, createSessionGuardFetch, hasStoredUserSession, SESSION_NOT_READY_MESSAGE } from "@/lib/sessionGuardFetch";
 import { isNetworkError } from "@/lib/offlineSync";
 import { setOnline } from "./helpers";
 
@@ -67,6 +67,39 @@ describe("createSessionGuardFetch", () => {
       headers: { Authorization: `Bearer ${ANON}` },
     });
     expect(base).toHaveBeenCalledOnce();
+  });
+});
+
+describe("which requests are held back while the session isn't ready", () => {
+  const T = "https://x.supabase.co/rest/v1/wallets";
+  const RPC = "https://x.supabase.co/rest/v1/rpc/transfer_wallet_funds";
+
+  it("holds back anything that could quietly do nothing, lets plain inserts through", () => {
+    expect(canSilentlyNoOp(T, "GET")).toBe(true); // 200 []
+    expect(canSilentlyNoOp(T, "HEAD")).toBe(true);
+    expect(canSilentlyNoOp(T, "PATCH")).toBe(true); // matches 0 rows, still "succeeds"
+    expect(canSilentlyNoOp(T, "DELETE")).toBe(true);
+    expect(canSilentlyNoOp(RPC, "POST")).toBe(true); // auth.uid() is null: may no-op
+    expect(canSilentlyNoOp(T, "POST")).toBe(false); // RLS rejects with a real 401
+    expect(canSilentlyNoOp("https://x.supabase.co/auth/v1/token", "POST")).toBe(false);
+  });
+
+  it("sends an anonymous insert so the server can answer it", async () => {
+    storeSession();
+    const base = ok();
+    await createSessionGuardFetch(ANON, KEY, base)(REST, { method: "POST", headers: { Authorization: `Bearer ${ANON}` } });
+    expect(base).toHaveBeenCalledOnce();
+  });
+
+  it("still holds back an anonymous update", async () => {
+    storeSession();
+    const base = ok();
+    const err = await createSessionGuardFetch(ANON, KEY, base)(REST, {
+      method: "PATCH",
+      headers: { Authorization: `Bearer ${ANON}` },
+    }).catch((e) => e);
+    expect(err.message).toBe(SESSION_NOT_READY_MESSAGE);
+    expect(base).not.toHaveBeenCalled();
   });
 });
 
