@@ -57,7 +57,10 @@ const iconMap: Record<string, React.ElementType> = {
 export default function Dashboard() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { data: wallets, isLoading: wLoading } = useWallets();
+  const { data: wallets, isError: walletsFailed } = useWallets();
+  // No wallet list yet (loading, or the server couldn't be reached with nothing cached):
+  // the total is unknown, which is not the same as ৳0.00.
+  const balanceKnown = Array.isArray(wallets);
   const { data: rates } = useCurrencyRates();
   const { data: debts } = useDebts();
   // Consecutive days with at least one logged transaction (habit nudge).
@@ -187,15 +190,26 @@ export default function Dashboard() {
             )}
           </button>
         </div>
-        <h2
-          className={cn(
-            "text-[1.75rem] min-[400px]:text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight tabular-nums break-words transition-all duration-300",
-            totalBalance < 0 ? "text-destructive" : "text-foreground",
-            isDisguised ? "filter blur-lg select-none opacity-40" : "filter blur-0 opacity-100"
-          )}
-        >
-          {formatMoney(totalBalance)}
-        </h2>
+        {balanceKnown ? (
+          <h2
+            className={cn(
+              "text-[1.75rem] min-[400px]:text-3xl sm:text-5xl md:text-6xl font-bold tracking-tight tabular-nums break-words transition-all duration-300",
+              totalBalance < 0 ? "text-destructive" : "text-foreground",
+              isDisguised ? "filter blur-lg select-none opacity-40" : "filter blur-0 opacity-100"
+            )}
+          >
+            {formatMoney(totalBalance)}
+          </h2>
+        ) : walletsFailed ? (
+          <div data-testid="balance-unavailable">
+            <h2 className="text-[1.75rem] min-[400px]:text-3xl sm:text-5xl font-bold tracking-tight text-muted-foreground">৳ —</h2>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Can't load your balances right now. They'll appear as soon as TakaFlow reaches the server.
+            </p>
+          </div>
+        ) : (
+          <Skeleton className="h-9 sm:h-14 w-48 sm:w-72" aria-label="Loading balance" data-testid="balance-loading" />
+        )}
       </motion.div>
 
       {/* Mobile Quick Action Buttons: One-tap instant access without scrolling */}
@@ -235,7 +249,7 @@ export default function Dashboard() {
       {/* Wallet Carousel Header */}
       <div className="flex items-center justify-between -mb-1">
         <p className="wallet-label text-[11px] sm:text-xs font-semibold text-muted-foreground tracking-wider">
-          Wallets ({displayWallets.length})
+          Wallets{balanceKnown ? ` (${displayWallets.length})` : ""}
         </p>
         <button
           type="button"
@@ -401,7 +415,9 @@ export default function Dashboard() {
 
       {/* Recent transactions */}
       <QuickLogPills />
-      <AllowanceCard budget={budgetGoal?.monthly_budget} spent={monthExpense} totalBalance={totalBalance} />
+      {balanceKnown && (
+        <AllowanceCard budget={budgetGoal?.monthly_budget} spent={monthExpense} totalBalance={totalBalance} />
+      )}
 
       <div className="vault-card p-4 sm:p-5">
         <div className="flex items-center justify-between mb-3">
