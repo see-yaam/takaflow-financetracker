@@ -176,6 +176,31 @@ jobs:
             echo "exists=false" >> "$GITHUB_OUTPUT"
           fi
 
+      # Release notes come from .github/release-notes.md, which must be marked for
+      # this exact version. They are also the changelog the in-app updater shows,
+      # so stale notes are never reused: without a matching marker a neutral line
+      # is published instead (and a warning is raised).
+      - name: Prepare release notes
+        if: github.ref == 'refs/heads/main' && success() && steps.relcheck.outputs.exists == 'false'
+        env:
+          VER: ${{ steps.version.outputs.name }}
+        run: |
+          NOTES=.github/release-notes.md
+          if [ -f "$NOTES" ] && grep -qx "<!-- release-notes-for: ${VER} -->" "$NOTES"; then
+            CHANGES=$(grep -v '^<!--' "$NOTES")
+          else
+            echo "::warning::$NOTES is not marked for v${VER}; publishing generic notes."
+            CHANGES="- **Bug fixes and improvements**: Stability and performance updates."
+          fi
+          {
+            echo "### 📱 TakaFlow Android v${VER}"
+            echo
+            echo "$CHANGES"
+            echo
+            echo "Installs over your current TakaFlow; your data stays. [Download TakaFlow.apk](https://github.com/${{ github.repository }}/releases/download/v${VER}/TakaFlow.apk)"
+          } > release-body.md
+          cat release-body.md
+
       - name: Publish Direct APK Download Release
         if: github.ref == 'refs/heads/main' && success() && steps.relcheck.outputs.exists == 'false'
         uses: softprops/action-gh-release@v2
@@ -183,14 +208,7 @@ jobs:
           tag_name: v${{ steps.version.outputs.name }}
           target_commitish: ${{ github.sha }}
           name: "TakaFlow v${{ steps.version.outputs.name }}"
-          body: |
-            ### 📱 TakaFlow Android v${{ steps.version.outputs.name }}
-            - **🔐 New signing key**: This release is signed with a new key. Before installing, open your current TakaFlow while online and make sure it shows no pending changes, then uninstall the old version and install this one.
-            - **🛡️ No silent data loss**: Offline changes and captured SMS/notifications are kept until they are safely saved; failed syncs are shown for review instead of being dropped.
-            - **🚫 Anti-scam shield**: Notifications from personal phone numbers and unknown senders are no longer auto-recorded.
-            - **🔁 Recurring catch-up**: Missed recurring entries are added automatically on their due dates.
-            - **Direct Download**:
-              - **[Download TakaFlow.apk](https://github.com/see-yaam/takaflow-financetracker/releases/download/v${{ steps.version.outputs.name }}/TakaFlow.apk)**
+          body_path: release-body.md
           files: TakaFlow.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
